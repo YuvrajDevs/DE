@@ -64,7 +64,7 @@ async function initPy() {
   pyReady = (async () => {
     await initSql();
     importScripts(BASE + 'vendor/py/pyodide.js');
-    pyodide = await self.loadPyodide({ indexURL: BASE + 'vendor/py/' });
+    pyodide = await self.loadPyodide({ indexURL: BASE + 'vendor/py/', stdLibURL: BASE + 'vendor/py/python_stdlib.wasm' });
     const shim = await (await fetch(BASE + 'pyspark_shim.py')).text();
     pyodide.FS.writeFile('/home/pyodide/pyspark_shim.py', shim);
     pyodide.runPython(RUNNER);
