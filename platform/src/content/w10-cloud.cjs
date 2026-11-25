@@ -1,4 +1,4 @@
-const { learn, mcq, tf, multi, match, order, scenario, bug, world, lesson } = require('./_h.cjs');
+const { learn, mcq, tf, multi, match, order, scenario, bug, viz, world, lesson } = require('./_h.cjs');
 
 module.exports = world('cloud', 'Cloud, DevOps and Agile', 'named in posting',
   'Cloud data services across AWS, Azure and GCP, moving large files, security basics, Git, CI/CD, Docker, infrastructure as code, and how data teams work in Agile.',
@@ -102,5 +102,46 @@ module.exports = world('cloud', 'Cloud, DevOps and Agile', 'named in posting',
       mcq('Which is a well-written acceptance criterion for a data story?', ['Make the dashboard better', 'Data must be correct', 'fct_claims loads by 06:00 IST on ≥95% of days and its totals match Salesforce within 0.1%', 'Use Spark'], 2, 'Verifiable and measurable: exactly what "System Requirements Engineering" in the posting means.'),
       match('Match the Scrum event to its purpose.', [['Sprint planning', 'Commit to the backlog items for the sprint'], ['Daily stand-up', 'Sync progress and blockers'], ['Sprint review', 'Demo the increment to stakeholders'], ['Retrospective', 'Improve how the team works']]),
       tf('Writing a runbook for what to do when a pipeline fails is part of solution documentation.', true),
+    ]),
+    lesson('c5', 'Automating deployment of distributed systems', 18, [
+      learn('From code to running jobs, automatically', `
+        The posting: *"Implements and **automates deployment** of our distributed system for ingesting and transforming data"* and *"uses DevOps … for data-driven applications."*
+
+        **Environments:** dev (experiment), test/staging (integration, real-ish data), prod (only via pipeline). Same code, different config.
+
+        **What gets deployed:** job definitions (schedules, clusters, parameters), code packages (Python wheels, notebooks), SQL/dbt models, infrastructure (storage, Kafka topics, permissions).
+
+        **Tools**
+        | Layer | Tooling |
+        |---|---|
+        | Infrastructure | Terraform / Bicep / CloudFormation |
+        | Databricks jobs & code | **Databricks Asset Bundles** («databricks bundle deploy -t prod») |
+        | Data Factory | ARM templates published from Git integration |
+        | Airflow | DAG files synced from Git to the Airflow environment |
+        | Containers | Docker images → registry → Kubernetes |
+        | Pipeline | GitHub Actions / Azure DevOps Pipelines |
+
+        «««yaml
+        # .github/workflows/deploy.yml (simplified)
+        on: { push: { branches: [main] } }
+        jobs:
+          deploy:
+            steps:
+              - uses: actions/checkout@v4
+              - run: pip install -r requirements.txt && pytest -q
+              - run: databricks bundle validate -t prod
+              - run: databricks bundle deploy -t prod     # auth: service principal via OIDC secrets
+        »»»
+        **Safe releases:** deploy to test first, run data diffs, then prod; keep releases small; roll back by redeploying the previous version; for big table changes, write to a new table and swap.
+      `),
+      viz('terminal', 'Deploy a job bundle', '', {
+        missions: [
+          { task: 'Validate the bundle config for the «test» target.', accept: '^databricks\\s+bundle\\s+validate(\\s+-t\\s+test)?$', out: 'Name: warranty-pipeline\nTarget: test\nValidation OK!', hint: 'databricks bundle validate -t test' },
+          { task: 'Deploy it to «test».', accept: '^databricks\\s+bundle\\s+deploy\\s+-t\\s+test$', out: 'Uploading bundle files...\nDeploying resources...\nDeployment complete!', hint: 'databricks bundle deploy -t test' },
+          { task: 'Run the «claims_daily» job in test.', accept: '^databricks\\s+bundle\\s+run\\s+(-t\\s+test\\s+)?claims_daily', out: 'Run URL: https://adb-123.azuredatabricks.net/#job/88/run/9123\n2026-11-25 10:42:13 "claims_daily" TERMINATED SUCCESS', why: 'In real life, CI runs these commands after tests pass; you rarely deploy prod by hand.', hint: 'databricks bundle run -t test claims_daily' },
+        ],
+      }),
+      mcq('Why deploy through CI/CD instead of editing jobs in the production UI?', ['It looks more professional', 'Every change is reviewed, tested, versioned and reproducible, and can be rolled back', 'The UI is read-only', 'It is faster to click'], 1),
+      order('Order a release.', ['Merge the reviewed PR to main', 'CI runs tests and validation', 'Deploy to test and run the job', 'Compare test outputs with expectations (data diff)', 'Deploy to production', 'Monitor the first production runs']),
     ]),
   ]);

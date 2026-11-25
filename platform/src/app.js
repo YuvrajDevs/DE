@@ -93,8 +93,16 @@ function indexContent() {
     l.cards.forEach((c, ci) => {
       c._id = c.id ? `${l.id}:${c.id}` : `${l.id}:${ci}`;
       c._lesson = l.id;
+      c._topic = c.topic || w.id;
       if (GRADABLE.has(c.t)) ITEMS[c._id] = c;
     });
+  }));
+  (C.practice || []).forEach(set => set.cards.forEach((c, ci) => {
+    c._id = `${set.id}:${ci}`;
+    c._lesson = set.id;
+    c._topic = c.topic || set.topic || 'practice';
+    c._bank = true;
+    if (GRADABLE.has(c.t)) ITEMS[c._id] = c;
   }));
 }
 
@@ -218,12 +226,12 @@ const Engine = {
       this.w.postMessage({ id, ...msg });
     });
   },
-  async warmSql() {
-    if (this.sql === 'ready' || this.sql === 'loading') return;
+  warmSql() {
+    if (this.sql === 'ready') return Promise.resolve(true);
+    if (this._sqlP && this.sql === 'loading') return this._sqlP;
     this.sql = 'loading'; updateHud();
-    const r = await this.call({ op: 'init-sql' }, 60000);
-    this.sql = r.ok ? 'ready' : 'error'; if (!r.ok) this.failMsg = r.error;
-    updateHud();
+    this._sqlP = this.call({ op: 'init-sql' }, 60000).then(r => { this.sql = r.ok ? 'ready' : 'error'; if (!r.ok) this.failMsg = r.error; updateHud(); return r.ok; });
+    return this._sqlP;
   },
   async warmPy() {
     if (this.py === 'ready') return true;
@@ -362,6 +370,9 @@ routes.home = (main) => {
           h('a', { class: 'mission-item', href: '#speed' }, h('span', { class: 'tick' }, '⚡'), h('span', null, h('span', { class: 't' }, 'Lightning round'), h('small', null, `90 seconds of rapid concept questions. Best: ${S.speedBest}`))),
           h('a', { class: 'mission-item', href: '#interview' }, h('span', { class: 'tick' }, '◎'), h('span', null, h('span', { class: 't' }, 'Mock interview'), h('small', null, 'Timed mixed round: SQL, PySpark, Python, design and behavioural.'))),
           h('a', { class: 'mission-item', href: '#arena' }, h('span', { class: 'tick' }, '›_'), h('span', null, h('span', { class: 't' }, 'Arena'), h('small', null, 'Free SQL / Python / PySpark console on the practice warehouse.'))),
+          h('a', { class: 'mission-item', href: '#practice' }, h('span', { class: 'tick' }, '◆'), h('span', null, h('span', { class: 't' }, 'Practice hub'), h('small', null, 'Query Gym, Python and PySpark Gyms, Scenario Room, Scale Lab, Bug Hunt, Interview Bank.'))),
+          h('a', { class: 'mission-item', href: '#posting' }, h('span', { class: 'tick' }, '✓'), h('span', null, h('span', { class: 't' }, 'Posting coverage'), h('small', null, 'Every line of the Cummins posting mapped to lessons. Track what is covered.'))),
+          h('a', { class: 'mission-item', href: '#glossary' }, h('span', { class: 'tick' }, 'Aa'), h('span', null, h('span', { class: 't' }, 'Glossary'), h('small', null, '150+ terms, searchable.'))),
           h('a', { class: 'mission-item', href: '#projects' }, h('span', { class: 'tick' }, '⚙'), h('span', null, h('span', { class: 't' }, 'Resume projects'), h('small', null, 'Two flagship builds, step by step, with resume bullets.')))),
         Sync.ref ? null : h('p', { class: 'muted', style: { fontSize: '12px', margin: '12px 0 0' } }, 'Progress is saved in this browser.'))),
     h('div', { class: 'section-head' }, h('h2', null, 'Achievements')),
@@ -869,6 +880,69 @@ routes.interview = (main, arg) => {
   } });
 };
 
+
+// ------------------------------------------------------------------ views: practice hub
+const TOPIC_NAMES = { orient: 'Orientation', tools: 'Toolbox', sql1: 'SQL basics', sql2: 'Advanced SQL', python: 'Python', model: 'Modelling', pipes: 'Pipelines', quality: 'Quality & governance', spark: 'Spark', bigdata: 'Big data', stream: 'Streaming', cloud: 'Cloud & DevOps', scale: 'Scale', design: 'Design', ai: 'AI-ready data', interview: 'Interview' };
+const GYMS = [
+  ['sql', 'Query Gym', 'Every SQL challenge, easy to hard, on the practice warehouse.', c => c.t === 'sql'],
+  ['python', 'Python Gym', 'Coding problems with hidden tests: parsing, grouping, APIs, generators.', c => c.t === 'py'],
+  ['pyspark', 'PySpark Gym', 'DataFrame, join, window and streaming-style problems.', c => c.t === 'spark'],
+  ['scenarios', 'Scenario Room', 'Multi-step incidents and judgement calls, the way interviews probe experience.', c => c.t === 'scenario'],
+  ['scale', 'Scale Lab', '100M requests, 1B events, 10 TB backfills: sizing and architecture under load.', c => c._topic === 'scale'],
+  ['concepts', 'Concept Drills', 'Rapid quizzes on every topic. Filter by topic below.', c => ['mcq', 'tf', 'multi', 'match', 'order', 'fill'].includes(c.t)],
+  ['bugs', 'Bug Hunt', 'Spot the broken line in SQL, Python, PySpark, Airflow and CI code.', c => c.t === 'bug'],
+  ['interview', 'Interview Bank', 'Say-it-out-loud questions with model answers: design, behavioural, Cummins-specific.', c => c.t === 'talk'],
+  ['weak', 'Weak Spots', 'Only the items you have missed and not yet mastered.', c => S.items[c._id] && S.items[c._id].w > 0 && S.items[c._id].b < 3],
+];
+routes.practice = (main, arg) => {
+  const all = Object.values(ITEMS);
+  if (!arg) {
+    main.append(h('div', { class: 'section-head', style: { marginTop: 0 } }, h('div', null, h('div', { class: 'eyebrow' }, 'Outside the main path · unlimited practice'), h('h2', null, 'Practice hub')),
+      h('span', { class: 'muted', style: { fontSize: '13px' } }, 'Sessions serve unseen and missed items first. Every miss goes to spaced review.')));
+    main.append(h('div', { class: 'hub' }, GYMS.map(([k, t, d, f]) => {
+      const items = all.filter(f); const seen = items.filter(c => S.items[c._id]).length;
+      return h('a', { href: `#practice-${k}` }, h('span', { class: 'n' }, `${items.length} items · ${seen} attempted`), h('b', null, t), h('span', { class: 'muted', style: { fontSize: '13px' } }, d), h('div', { class: 'bar' }, h('i', { style: { width: (items.length ? 100 * seen / items.length : 0) + '%' } })));
+    })));
+    main.append(h('div', { class: 'section-head' }, h('h2', null, 'Concept drills by topic')),
+      h('div', { class: 'lessons' }, Object.entries(TOPIC_NAMES).map(([k, t]) => {
+        const n = all.filter(c => c._topic === k && ['mcq', 'tf', 'multi', 'match', 'order', 'fill'].includes(c.t)).length;
+        return n ? h('a', { class: 'lesson-pill', href: `#practice-concepts-${k}` }, t, h('span', { class: 'ln' }, String(n))) : null;
+      })));
+    return;
+  }
+  const [kind, topic] = arg.split('-');
+  const gym = GYMS.find(g => g[0] === kind) || GYMS[0];
+  let pool = all.filter(gym[3]);
+  if (topic) pool = pool.filter(c => c._topic === topic);
+  const score = c => { const it = S.items[c._id]; return !it ? 0 : it.w > 0 && it.b < 3 ? 1 : 2 + it.b; };
+  const size = ['sql', 'python', 'pyspark', 'scenarios'].includes(kind) ? 6 : kind === 'interview' ? 5 : 12;
+  const cards = shuffle(pool).sort((a, b) => score(a) - score(b)).slice(0, size);
+  if (!cards.length) { main.append(h('div', { class: 'card done-screen' }, h('h2', null, 'Nothing here yet'), h('p', { class: 'muted' }, kind === 'weak' ? 'No weak spots. Everything you missed has been mastered.' : 'No items match.'), h('a', { class: 'btn primary', href: '#practice' }, 'Practice hub'))); return; }
+  return Player(main, cards, { title: `${gym[1]}${topic ? ' · ' + (TOPIC_NAMES[topic] || topic) : ''} · ${cards.length} of ${pool.length}`, mode: 'review', exitHref: '#practice', onDone: (s2, stage) => {
+    stage.replaceChildren(h('div', { class: 'card done-screen' }, h('div', { class: 'eyebrow' }, gym[1]), h('h2', null, `${s2.correctFirst}/${s2.answered} first try`),
+      h('div', { class: 'kv' }, h('div', null, h('b', null, `+${s2.xp}`), h('span', null, 'XP')), h('div', null, h('b', null, `${Math.round(s2.acc * 100)}%`), h('span', null, 'accuracy')), h('div', null, h('b', null, `${pool.filter(c => S.items[c._id]).length}/${pool.length}`), h('span', null, 'attempted'))),
+      h('div', { class: 'row', style: { justifyContent: 'center' } }, h('a', { class: 'btn', href: '#practice' }, 'Hub'), h('button', { class: 'btn primary', onclick: render }, 'Another set'))));
+  } });
+};
+
+// ------------------------------------------------------------------ views: posting coverage
+routes.posting = (main) => {
+  main.append(h('div', { class: 'section-head', style: { marginTop: 0 } }, h('div', null, h('div', { class: 'eyebrow' }, 'Cummins · Data Engineer 1 · Pune · ReqID 2435232'), h('h2', null, 'Posting coverage')),
+    h('span', { class: 'muted', style: { fontSize: '13px' } }, 'Every line of the job posting, mapped to the lessons and practice that cover it.')));
+  C.posting.forEach(sec => {
+    main.append(h('div', { class: 'week-label' }, sec.section));
+    main.append(h('div', { class: 'grid', style: { gap: '8px' } }, sec.items.map(it => {
+      const ls = it.lessons.filter(id => IDX[id]);
+      const done = ls.filter(id => S.lessons[id]).length;
+      return h('div', { class: 'cov-row' },
+        h('div', { style: { minWidth: 0 } }, h('div', { html: mdInline(it.text) }), it.note ? h('div', { class: 'muted', style: { fontSize: '13px' } }, it.note) : null,
+          h('div', { class: 'lessons' }, ls.map(id => h('a', { class: 'lesson-pill' + (S.lessons[id] ? ' done' : ''), href: `#lesson-${id}` }, IDX[id].lesson.title)),
+            (it.practice || []).map(pk => h('a', { class: 'lesson-pill', href: `#practice-${pk}` }, '◎ ', (GYMS.find(g => g[0] === pk.split('-')[0]) || ['', pk])[1] + (pk.includes('-') ? ' · ' + (TOPIC_NAMES[pk.split('-')[1]] || '') : ''))))),
+        h('span', { class: 'pct' }, ls.length ? `${done}/${ls.length}` : '—'));
+    })));
+  });
+};
+
 // ------------------------------------------------------------------ views: arena
 const ARENA_SAMPLES = {
   sql: `-- The practice warehouse: Apex Engines (fictional)\n-- Warranty flow: crf -> service_requests -> pir -> claims -> credit_notes\nSELECT c.status,\n       COUNT(*)                      AS claims,\n       ROUND(SUM(c.claim_amount), 2) AS claimed,\n       ROUND(SUM(c.approved_amount), 2) AS approved\nFROM claims c\nGROUP BY c.status\nORDER BY claims DESC;`,
@@ -990,13 +1064,14 @@ routes.projects = (main) => {
 
 // ------------------------------------------------------------------ boot
 function shell() {
-  const navItems = [['home', 'Home'], ['map', 'Map'], ['review', 'Review'], ['arena', 'Arena'], ['interview', 'Interview'], ['plan', 'Plan'], ['projects', 'Projects'], ['glossary', 'Glossary']];
+  const navItems = [['home', 'Home'], ['map', 'Map'], ['practice', 'Practice'], ['review', 'Review'], ['interview', 'Interview'], ['arena', 'Arena'], ['plan', 'Plan'], ['projects', 'Projects'], ['posting', 'Posting']];
   const icons = {
     home: '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
     map: '<path d="M4 6h5l3 4h8M4 18h5l3-4"/><circle cx="4" cy="6" r="2"/><circle cx="4" cy="18" r="2"/><circle cx="20" cy="10" r="2"/>',
     review: '<path d="M4 12a8 8 0 1 0 3-6.2M4 4v4h4"/>',
     arena: '<path d="M4 6l6 6-6 6M12 18h8"/>',
     interview: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/>',
+    practice: '<path d="M6 4v16M18 4v16M3 8v8M21 8v8M6 12h12"/>',
   };
   const svg = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[k]}</svg>`;
   document.body.prepend(
@@ -1006,7 +1081,7 @@ function shell() {
       h('div', { class: 'hud', id: 'hud' }),
       h('a', { class: 'theme-btn', href: '#settings', title: 'Settings', 'aria-label': 'Settings', style: { display: 'grid', placeItems: 'center', textDecoration: 'none', color: 'var(--ink-2)' } }, '⚙'))),
   );
-  document.body.append(h('nav', { class: 'tabbar', 'aria-label': 'Main' }, ['home', 'map', 'review', 'arena', 'interview'].map(r => h('a', { href: '#' + r, 'data-r': r, html: svg(r) + `<span>${r[0].toUpperCase() + r.slice(1)}</span>` }))));
+  document.body.append(h('nav', { class: 'tabbar', 'aria-label': 'Main' }, ['home', 'map', 'practice', 'review', 'interview'].map(r => h('a', { href: '#' + r, 'data-r': r, html: svg(r) + `<span>${r[0].toUpperCase() + r.slice(1)}</span>` }))));
 }
 
 async function boot() {

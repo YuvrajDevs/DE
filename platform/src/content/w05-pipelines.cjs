@@ -221,4 +221,40 @@ except ValueError:
         ['Delta Lake', 'ACID MERGE and time travel on Parquet'],
       ]),
     ]),
+    lesson('e7', 'Monitoring, alerting and troubleshooting pipelines', 20, [
+      learn('Pipelines with monitoring and alert mechanisms', `
+        The posting: *"Develops reliable, efficient, scalable and quality data pipelines with **monitoring and alert mechanisms**"* and *"participates in testing and **troubleshooting** of data pipelines."*
+
+        **What to monitor**
+        | Signal | Example alert |
+        |---|---|
+        | Run status | task failed after 3 retries |
+        | Duration | run took > 2× its 14-day median |
+        | Freshness | gold.fct_claims not updated in 26 h |
+        | Volume | rows loaded 40% below the same weekday average |
+        | Quality | uniqueness/FK/range checks failed |
+        | Schema | new/missing column in the source |
+        | Lag (streaming) | consumer lag > 10 min |
+        | Cost | job cost per run up 3× |
+
+        **Good alerts** are actionable (what broke, where, link to logs/runbook), routed to an owner (Teams/email/PagerDuty), deduplicated, and tiered (page vs ticket). Alert fatigue makes people ignore real incidents.
+
+        **Troubleshooting loop:** read the error → find the failing step (orchestrator UI) → check what changed (code deploys, source schema, data volume, permissions, infra) → reproduce on a sample → fix → backfill affected periods → add a test/alert so it can't recur silently → write a short post-incident note.
+
+        **Logging:** structured logs (JSON) with run_id, logical date, step, row counts in/out, duration. Row counts at each step make "where did my rows go?" a two-minute question.
+      `),
+      multi('Which make an alert actionable?', ['Names the pipeline, step and logical date', 'Links to logs and a runbook', 'Fires every minute until someone notices', 'Routes to the owning team', 'Says only "Error occurred"'], [0, 1, 3]),
+      order('Order the troubleshooting loop.', ['Read the error and find the failing step', 'Check what changed: code, source schema, volume, permissions', 'Reproduce on a small sample', 'Fix through the normal deploy path', 'Backfill affected periods', 'Add a test or alert so it cannot recur silently']),
+      scenario('Rows vanish between silver and gold', `Silver has **1,204,331** claims for October. Gold «fct_claims» has **1,187,902**. No errors anywhere.`, [
+        ['Fastest way to locate the loss?', [
+          ['Compare row counts after each transformation step (logged counts) and anti-join silver vs gold claim_ids', true, 'Per-step counts and an anti join pinpoint the step and the rows.'],
+          ['Re-run everything and hope', false, 'Same code, same result.'],
+        ]],
+        ['The missing rows all have dealer_id values not yet in dim_dealer. Cause?', [
+          ['An INNER JOIN to the dealer dimension drops facts with late-arriving dimension members', true, 'Classic. Use an "unknown" member (dealer_key = -1) or a LEFT JOIN, and alert on unmatched keys.'],
+          ['Gold is filtered by date incorrectly', false, 'The pattern points to the join.'],
+        ]],
+      ]),
+      mcq('A pipeline reports success but loaded 0 rows today. Which monitor catches it?', ['Run-status alert', 'Volume / row-count anomaly check', 'Cost alert', 'None'], 1),
+    ]),
   ]);

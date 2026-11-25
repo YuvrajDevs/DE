@@ -64,8 +64,9 @@ def run_py(code, tests, spark=False):
     return ns, buf.getvalue()
 
 fails = 0; n = 0; empties = []
-for w in C['worlds']:
-    for l in w['lessons']:
+sets = [l for w in C['worlds'] for l in w['lessons']] + C.get('practice', [])
+if True:
+    for l in sets:
         for i, c in enumerate(l['cards']):
             tag = f"{l['id']}#{i} {c['t']}"
             try:

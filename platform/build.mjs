@@ -14,6 +14,8 @@ const worlds = order.worlds.map(f => require(path.join(SRC, 'content', f)));
 const plan = require(path.join(SRC, 'content', 'plan.cjs'));
 const glossary = require(path.join(SRC, 'content', 'glossary.cjs'));
 const projects = require(path.join(SRC, 'content', 'projects.cjs'));
+const practice = require(path.join(SRC, 'content', 'practice.cjs'));
+const posting = require(path.join(SRC, 'content', 'posting.cjs'));
 const ids = new Set(); let cards = 0; const types = {};
 for (const w of worlds) for (const l of w.lessons) {
   if (ids.has(l.id)) throw new Error('duplicate lesson id ' + l.id);
@@ -26,14 +28,21 @@ for (const w of worlds) for (const l of w.lessons) {
     if (c.t === 'mcq' && (c.a < 0 || c.a >= c.opts.length)) throw new Error(`${l.id}: mcq answer out of range: ${c.q}`);
   }
 }
+for (const set of practice) for (const c of set.cards) { cards++; types[c.t] = (types[c.t] || 0) + 1; }
+for (const sec of posting) for (const it of sec.items) for (const id of it.lessons) if (!ids.has(id)) throw new Error('posting: unknown lesson ' + id);
 for (const d of plan) for (const it of d.items) if (it.lesson && !ids.has(it.lesson)) throw new Error(`plan day ${d.day}: unknown lesson ${it.lesson}`);
-fs.writeFileSync(path.join(DIST, 'content.json'), JSON.stringify({ worlds, plan, glossary, projects }));
+fs.writeFileSync(path.join(DIST, 'content.json'), JSON.stringify({ worlds, plan, glossary, projects, practice, posting }));
+
+// ---- syntax-check every inlined script
+import vm from 'node:vm';
+for (const f of ['viz.js', 'viz2.js', 'app.js', 'engine-worker.js']) new vm.Script(fs.readFileSync(path.join(SRC, f), 'utf8'), { filename: f });
 
 // ---- page
 let html = fs.readFileSync(path.join(SRC, 'shell.html'), 'utf8');
 const inline = (marker, file) => { const s = fs.readFileSync(path.join(SRC, file), 'utf8').replace(/<\/script/gi, '<\\/script'); html = html.replace(marker, () => s); };
 inline('/*CSS*/', 'app.css');
 inline('/*VIZ*/', 'viz.js');
+inline('/*VIZ2*/', 'viz2.js');
 inline('/*APP*/', 'app.js');
 fs.writeFileSync(path.join(DIST, 'index.html'), html);   // published page (the Artifact tool adds the document skeleton)
 fs.writeFileSync(path.join(DIST, 'dev.html'), '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body>' + html + '</body></html>');  // local dev

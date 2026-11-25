@@ -166,4 +166,21 @@ assert res2['passed'] is True and res2['failures'] == {'amt_not_null': 0, 'amt_n
         Tie it to your experience: *"Today I already reconcile CRM Analytics KPIs against SOQL and model the CRF-to-credit-note process. This formalises that into a product."*
       `, 'design'),
     ]),
+    lesson('q6', 'Building analytical solutions', 15, [
+      learn('From gold tables to decisions', `
+        The posting: *"Exposure to building analytical solutions"*, and the team serves *"reporting, analytics, automation, and GenAI use cases."* You already build analytical solutions in CRM Analytics; here is the general version.
+
+        «««flow
+        Gold data product -> Semantic model (measures, relationships, RLS) -> Reports / dashboards -> Alerts and automation
+        »»»
+        - **Semantic model** (Power BI dataset, Tableau data source, dbt metrics): relationships between fact and dimensions, measures defined once («Approval rate = DIVIDE([Approved], [Claims])»), hierarchies (region → city → dealer), row-level security.
+        - **Import vs DirectQuery**: import copies data into the BI engine (fast, scheduled refresh); DirectQuery queries the warehouse live (fresh, slower, puts load on the warehouse). Aggregation tables blend both.
+        - **Design for the decision**: KPI first, then trend, then breakdown, then drill to detail. That's the structure of your Service Order and Claims dashboards.
+        - **Automation**: data-driven alerts (claims backlog > threshold → email/Teams), scheduled exports, writing scores back to Salesforce (reverse ETL).
+        - **Validation**: reconcile BI totals with gold and with the source, as you do with SOQL today.
+      `),
+      mcq('Your dashboard must show near-live claim status for 300 users, but the warehouse is shared with heavy ETL. Most balanced approach?', ['DirectQuery everything against raw tables', 'Import/aggregated model refreshed frequently from gold, with a separate serving warehouse', 'Export CSVs hourly', 'Query Salesforce directly'], 1),
+      match('Match the BI concept.', [['Measure', 'A calculation defined once (e.g. approval rate)'], ['Row-level security', 'Each dealer sees only their rows'], ['DirectQuery', 'Live queries to the warehouse'], ['Import mode', 'Data copied into the BI engine on refresh']]),
+      tf('Defining "approval rate" separately in each dashboard is fine as long as each is documented.', false, 'Define metrics once in the semantic layer, or numbers drift apart across dashboards.'),
+    ]),
   ]);

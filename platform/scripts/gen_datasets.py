@@ -63,6 +63,7 @@ cnames = ["Sahyadri Infra", "Deccan Logistics", "Konkan Marine", "Vidarbha Minin
 customers = []
 for i, n in enumerate(cnames, start=1):
     customers.append((i, n, R.choice(segs), R.choice(regions), "India" if i <= 24 else R.choice(["UAE", "Sri Lanka", "Bangladesh"])))
+customers.append((31, "Dormant Gensets Ltd", "Power Gen", "East", "India"))  # edge case: customer with no CRFs
 table("customers", "customer_id INTEGER PRIMARY KEY, customer_name TEXT, segment TEXT, region TEXT, country TEXT", customers)
 
 # ---------------- dealers ----------------
@@ -71,6 +72,7 @@ dnames = [("Pune Power Services", "West", "Pune"), ("Mumbai Engine Care", "West"
           ("Ahmedabad Motive", "West", "Ahmedabad"), ("Lucknow Service Bay", "North", "Lucknow"), ("Bhubaneswar Drives", "East", "Bhubaneswar"),
           ("Kochi Marine Engines", "South", "Kochi")]
 dealers = [(i, n, r, c) for i, (n, r, c) in enumerate(dnames, start=1)]
+dealers.append((11, "Nagpur Engine Point", "West", "Nagpur"))  # edge case: dealer with no claims
 table("dealers", "dealer_id INTEGER PRIMARY KEY, dealer_name TEXT, region TEXT, city TEXT", dealers)
 
 # ---------------- engines ----------------
@@ -132,6 +134,7 @@ emps = [
     (12, "Sarah Lin", "Data Engineer III", 11, 2, "2019-05-06", 11800000),
     (13, "Mike Ortiz", "Service Technician", 11, 2, "2018-03-12", 6100000),
     (14, "Priya Menon", "Service Technician", 11, 2, "2020-10-19", 5900000),
+    (15, "Ravi Kulkarni", "Principal Data Architect", 11, 2, "2015-08-17", 16200000),  # edge case: earns more than manager
 ]
 table("employees", "emp_id INTEGER PRIMARY KEY, name TEXT, role TEXT, manager_id INTEGER, plant_id INTEGER, hire_date TEXT, salary INTEGER", emps)
 techs = [13, 14, 8, 9]
@@ -178,6 +181,7 @@ table("crf", "crf_id INTEGER PRIMARY KEY, customer_id INTEGER, dealer_id INTEGER
 table("service_requests", "sr_id INTEGER PRIMARY KEY, crf_id INTEGER, opened_at TEXT, closed_at TEXT, priority TEXT, status TEXT, technician_id INTEGER", srs)
 table("pir", "pir_id INTEGER PRIMARY KEY, sr_id INTEGER, created_at TEXT, failure_code TEXT, root_cause TEXT, status TEXT", pirs)
 table("claims", "claim_id INTEGER PRIMARY KEY, pir_id INTEGER, dealer_id INTEGER, submitted_at TEXT, claim_amount REAL, approved_amount REAL, status TEXT", claims)
+cns[4] = (cns[4][0], cns[4][1], cns[4][2], round(cns[4][3] * 0.9, 2))  # edge case: credit note short-paid
 table("credit_notes", "cn_id INTEGER PRIMARY KEY, claim_id INTEGER, issued_at TEXT, amount REAL", cns)
 
 # ---------------- quality defects ----------------

@@ -7,15 +7,19 @@
 const BASE = self.location.href.replace(/[^/]*$/, '');
 let SQL = null, baseBytes = null, pyodide = null, pyReady = null;
 
-async function initSql() {
-  if (SQL) return;
-  importScripts(BASE + 'vendor/sql/sql-wasm.js');
-  SQL = await self.initSqlJs({ locateFile: f => BASE + 'vendor/sql/' + f });
-  const ddl = await (await fetch(BASE + 'datasets.sql')).text();
-  const db = new SQL.Database();
-  db.exec(ddl);
-  baseBytes = db.export();
-  db.close();
+let sqlReady = null;
+function initSql() {
+  if (!sqlReady) sqlReady = (async () => {
+    importScripts(BASE + 'vendor/sql/sql-wasm.js');
+    const lib = await self.initSqlJs({ locateFile: f => BASE + 'vendor/sql/' + f });
+    const ddl = await (await fetch(BASE + 'datasets.sql')).text();
+    const db = new lib.Database();
+    db.exec(ddl);
+    baseBytes = db.export();
+    db.close();
+    SQL = lib;               // publish only once the warehouse is fully loaded
+  })();
+  return sqlReady;
 }
 
 function freshDb() { return new SQL.Database(baseBytes); }
