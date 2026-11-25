@@ -15,7 +15,7 @@ module.exports = [
     I('Develops **physical data models** and implements storage architectures per design guidelines', ['m1', 'm5', 'e6', 'b4'], ['concepts-model']),
     I('Contributes to **conceptual, logical and physical** models; analyses data elements, flows, dependencies', ['m1', 'm2', 'm3', 'm4', 'q3'], ['sql']),
     I('Participates in **testing and troubleshooting** of pipelines', ['p6', 'q2', 'e7', 'd3'], ['bugs', 'scenarios']),
-    I('Large-scale storage/processing on distributed and cloud platforms: **Data Lakes, Hadoop, HBase, Cassandra, MongoDB, Accumulo, DynamoDB**', ['b1', 'b2', 'b3', 'b4', 'c1'], ['concepts-bigdata'], 'Accumulo is covered in the Concept Drills bank.'),
+    I('Large-scale storage/processing on distributed and cloud platforms: **Data Lakes, Hadoop, HBase, Cassandra, MongoDB, Accumulo, DynamoDB**', ['b1', 'b10', 'b2', 'b7', 'b3', 'b8', 'b4', 'c1'], ['concepts-bigdata'], 'Hands-on labs: HDFS/YARN commands, Hive DDL, HBase/Cassandra/DynamoDB/MongoDB/Accumulo key design.'),
     I('Uses **DevOps, Scrum, Kanban** and continuous improvement', ['c3', 'c4', 'c5'], ['concepts-cloud']),
   ] },
   { section: 'Competencies', items: [
@@ -34,7 +34,7 @@ module.exports = [
   ] },
   { section: 'Knowledge highly preferred', items: [
     I('Exposure to **Big Data open source**', ['b1', 'b2', 'b3', 'k1'], ['concepts-bigdata']),
-    I('**Spark, Scala/Java, MapReduce, Hive, HBase, Kafka**', ['k1', 'k2', 'k3', 'k4', 'k5', 'k6', 'k7', 'k8', 'b5', 'b1', 'b2', 'b3', 'r1'], ['pyspark', 'concepts-spark']),
+    I('**Spark, Scala/Java, MapReduce, Hive, HBase, Kafka**', ['k1', 'k2', 'k3', 'k4', 'k5', 'k6', 'k7', 'k8', 'b5', 'b9', 'b1', 'b6', 'b2', 'b7', 'b3', 'b8', 'r1', 'r5'], ['pyspark', 'python', 'concepts-spark']),
     I('**SQL** query language', ['s1', 's2', 's3', 's4', 's5', 's6', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7'], ['sql']),
     I('**Clustered compute cloud-based** implementation', ['c1', 'k6', 'k7', 't8'], ['scale']),
     I('**Large file movement** for a cloud environment', ['c2', 'e6'], ['concepts-cloud']),

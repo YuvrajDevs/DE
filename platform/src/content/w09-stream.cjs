@@ -1,4 +1,4 @@
-const { learn, mcq, tf, multi, match, order, sql, spark, viz, scenario, talk, world, lesson } = require('./_h.cjs');
+const { learn, mcq, tf, multi, match, order, sql, spark, py, viz, scenario, talk, world, lesson } = require('./_h.cjs');
 
 module.exports = world('stream', 'Streaming, Kafka and IoT', 'named in posting',
   'Event-based ingestion: Kafka topics, partitions, consumer groups and offsets, delivery semantics, Spark Structured Streaming with watermarks, and an engine telemetry pipeline end to end.',
@@ -117,5 +117,50 @@ result = (last3.groupBy("engine_id")
         - **Ops**: consumer lag, events/sec, alert latency, DQ failure rate, dead-letter queue for unparseable events, checkpoints.
         - **Scale numbers**: say them (events/s, bytes/event, daily volume) and size partitions from them.
       `),
+    ]),
+    lesson('r5', 'Lab: Kafka internals in code', 20, [
+      learn('What Kafka does under the hood', `
+        - **Partitioner:** «partition = hash(key) % num_partitions» (Kafka uses murmur2; we use crc32 here). Same key, same partition. **Changing the partition count changes the mapping** for new messages, which is why you size partitions up front.
+        - **Group assignment:** when consumers join or leave a group, partitions are **rebalanced**. The *range* strategy gives each consumer a contiguous block; *round-robin* deals them out one by one.
+        - **Lag** per partition = log-end offset − committed offset. Total lag is the sum.
+        - **CLI you'll use:** «kafka-consumer-groups --bootstrap-server b:9092 --describe --group lake-loader» shows partition, current offset, log-end offset and lag; «--reset-offsets --to-datetime …» replays from a time.
+      `),
+      py({ q: 'Write «partition_for(key, n)» = «zlib.crc32(key.encode()) % n», and «route(keys, n)» returning a dict «{partition: [keys in arrival order]}».', starter: 'import zlib\n\ndef partition_for(key, n):\n    pass\n\ndef route(keys, n):\n    pass\n', tests: `import zlib
+assert partition_for('engine-7', 6) == zlib.crc32(b'engine-7') % 6
+r = route(['e1', 'e2', 'e1', 'e3', 'e1'], 3)
+assert sum(len(v) for v in r.values()) == 5
+p = partition_for('e1', 3)
+assert r[p][:1] == ['e1'] and r[p].count('e1') == 3, 'all e1 events must land in one partition, in order'`, solution: `import zlib
+from collections import defaultdict
+
+def partition_for(key, n):
+    return zlib.crc32(key.encode()) % n
+
+def route(keys, n):
+    out = defaultdict(list)
+    for k in keys:
+        out[partition_for(k, n)].append(k)
+    return dict(out)` }),
+      py({ q: 'Range assignment: «assign_range(partitions, consumers)» splits a sorted list of partition ids into contiguous blocks; the first «len(partitions) % len(consumers)» consumers get one extra. Return «{consumer: [partitions]}» (consumers in the given order; extra consumers get «[]»).', starter: 'def assign_range(partitions, consumers):\n    pass\n', tests: `assert assign_range([0, 1, 2, 3, 4, 5], ['c1', 'c2', 'c3', 'c4']) == {'c1': [0, 1], 'c2': [2, 3], 'c3': [4], 'c4': [5]}
+assert assign_range([0, 1], ['a', 'b', 'c']) == {'a': [0], 'b': [1], 'c': []}`, solution: `def assign_range(partitions, consumers):
+    parts = sorted(partitions)
+    base, extra = divmod(len(parts), len(consumers))
+    out, i = {}, 0
+    for idx, c in enumerate(consumers):
+        size = base + (1 if idx < extra else 0)
+        out[c] = parts[i:i + size]
+        i += size
+    return out` }),
+      py({ q: 'Lag report: «lag(end_offsets, committed)» takes dicts «{partition: offset}» and returns «(per_partition_lag dict, total)». A partition with no committed offset counts the whole log («end − 0»).', starter: 'def lag(end_offsets, committed):\n    pass\n', tests: `per, total = lag({0: 100, 1: 250, 2: 40}, {0: 90, 1: 250})
+assert per == {0: 10, 1: 0, 2: 40} and total == 50, (per, total)`, solution: `def lag(end_offsets, committed):
+    per = {p: end - committed.get(p, 0) for p, end in end_offsets.items()}
+    return per, sum(per.values())` }),
+      viz('terminal', 'Investigate a lagging consumer group', '', {
+        missions: [
+          { task: 'Describe consumer group «lake-loader».', accept: '^kafka-consumer-groups(\\.sh)?\\s+.*--describe.*--group\\s+lake-loader|^kafka-consumer-groups(\\.sh)?\\s+.*--group\\s+lake-loader.*--describe', out: 'GROUP        TOPIC             PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG\nlake-loader  engine-telemetry  0          1204331         1204390         59\nlake-loader  engine-telemetry  1          998102          2310557         1312455\nlake-loader  engine-telemetry  2          1100342         1100401         59', why: 'Partition 1 is far behind: a stuck consumer or a hot key on that partition.', hint: 'kafka-consumer-groups --bootstrap-server localhost:9092 --describe --group lake-loader' },
+          { task: 'Check which keys dominate partition 1: read 5 messages from it, printing keys.', accept: '^kafka-console-consumer(\\.sh)?\\s+.*--partition\\s+1.*--max-messages\\s+5.*|^kafka-console-consumer(\\.sh)?\\s+.*--max-messages\\s+5.*--partition\\s+1.*', out: 'engine-UNKNOWN\t{...}\nengine-UNKNOWN\t{...}\nengine-UNKNOWN\t{...}\nengine-UNKNOWN\t{...}\nengine-7\t{...}', why: 'A default key ("UNKNOWN") floods one partition: a hot key. Fix at the producer (don\'t send a constant key) and drain the backlog.', hint: 'kafka-console-consumer --bootstrap-server localhost:9092 --topic engine-telemetry --partition 1 --max-messages 5 --property print.key=true' },
+        ],
+      }),
+      mcq('You increase a topic from 6 to 12 partitions. What happens to per-key ordering?', ['Nothing changes', 'New messages for a key may go to a different partition than its older messages, so ordering across the change isn\'t guaranteed', 'Kafka re-sorts all old messages', 'Keys are ignored afterwards'], 1),
     ]),
   ]);
