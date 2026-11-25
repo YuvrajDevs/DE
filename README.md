@@ -33,3 +33,7 @@ Content lives in `platform/src/content/*.cjs` (one file per world). In content s
 3. Deploy. No environment variables are needed.
 
 On Vercel, progress is saved in the browser (localStorage). Use **Settings → Copy progress backup** to move progress between devices.
+
+## Projects
+
+- **Turbofan Telemetry Streaming Platform**: https://github.com/YuvrajDevs/turbofan-telemetry (its own repo). A full step-by-step walkthrough is inside DE Arcade (stage "Project: Turbofan Telemetry").

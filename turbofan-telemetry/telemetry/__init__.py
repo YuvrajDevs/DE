@@ -1,1 +1,0 @@
-"""Turbofan Telemetry Streaming Platform."""
