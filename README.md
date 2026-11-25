@@ -21,7 +21,15 @@ cd platform
 ./scripts/fetch-vendor.sh        # downloads Pyodide + sql.js into dist/vendor (once)
 node build.mjs                   # builds dist/ from src/
 python3 scripts/validate.py      # runs every SQL/Python/PySpark reference solution
-python3 -m http.server -d dist 8000   # then open http://localhost:8000/dev.html
+python3 -m http.server -d dist 8000   # then open http://localhost:8000/
 ```
 
 Content lives in `platform/src/content/*.cjs` (one file per world). In content strings, `«` and `»` become backticks.
+
+### Deploy on Vercel
+
+1. Import the GitHub repo in Vercel.
+2. Set **Root Directory** to `platform`. `platform/vercel.json` already sets the build command (downloads the engines, then builds) and the output directory (`dist`).
+3. Deploy. No environment variables are needed.
+
+On Vercel, progress is saved in the browser (localStorage). Use **Settings → Copy progress backup** to move progress between devices.

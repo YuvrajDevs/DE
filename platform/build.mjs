@@ -44,7 +44,9 @@ inline('/*CSS*/', 'app.css');
 inline('/*VIZ*/', 'viz.js');
 inline('/*VIZ2*/', 'viz2.js');
 inline('/*APP*/', 'app.js');
-fs.writeFileSync(path.join(DIST, 'index.html'), html);   // published page (the Artifact tool adds the document skeleton)
-fs.writeFileSync(path.join(DIST, 'dev.html'), '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body>' + html + '</body></html>');  // local dev
+const fullDoc = '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body>' + html + '</body></html>';
+fs.writeFileSync(path.join(DIST, 'index.html'), fullDoc);   // standalone site (Vercel, any static host, local dev)
+fs.writeFileSync(path.join(DIST, 'dev.html'), fullDoc);     // kept for old links
+fs.writeFileSync(path.join(DIST, 'artifact.html'), html);   // claude.ai artifact page (the host adds the document skeleton)
 for (const f of ['engine-worker.js', 'pyspark_shim.py', 'datasets.sql']) fs.copyFileSync(path.join(SRC, f), path.join(DIST, f));
 console.log(`built: ${worlds.length} worlds, ${ids.size} lessons, ${cards} cards`, types, `${plan.length} plan days, ${glossary.length} glossary terms`);
