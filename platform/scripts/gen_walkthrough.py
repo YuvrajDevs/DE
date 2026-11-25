@@ -132,7 +132,7 @@ FAILURES = [
     dict(id="F14", kind="design", title="44 of 100 FD003 engines never alerted", when="Analysing alert quality",
          error="FD001: 100/100 engines alerted · FD003: 56/100",
          cause="FD003 has a second fault mode (fan). For those engines s7, s12, s20, s21 move **up** (+14.9, +14.4, +0.6, +0.4) while the index expects them to move down, so they cancel out the rising sensors.",
-         fix="Left as Milestone T1 (yours): make the index fault-mode aware and re-calibrate.",
+         fix="Fault-mode aware index (Step 12): score the HPC and fan patterns separately, take max(HPC, 0.4 x fan). Tuned on odd engines, checked on even ones. FD003 detection 56% -> 100%, same lead times and false alarms as FD001.",
          lesson="A model calibrated on one population silently under-performs on another. Measure quality per segment."),
     dict(id="F15", kind="bug", title="Producer crash: negative sleep", when="`scripts/demo.sh` at 3,000 events/s",
          error="ValueError: sleep length must be non-negative",
@@ -153,7 +153,7 @@ tested, documented GitHub repository: every decision (yours and mine), the alter
 **real** code, pulled from the repo), every error we hit and how it was fixed. If you read it carefully and
 do the exercises, you can rebuild the project from scratch and defend every line of it in an interview.
 
-**Repo:** `github.com/YuvrajDevs/turbofan-telemetry`
+**Repo:** `github.com/YuvrajDevs/tf-telemetry` · **Project page:** `yuvrajdevs.github.io/tf-telemetry`
 
 **One sentence:** NASA's public turbofan engine dataset (200 engines, each run until failure) is replayed as a
 live fleet into **Kafka**, processed by **Spark Structured Streaming** into **Delta Lake** bronze, silver and gold tables,
@@ -169,7 +169,7 @@ duplicates, late data, malformed data and a hard crash.
 | Alerts are early and complete | On 100 real FD001 engines: WARNING median **44 cycles before failure** (90% at least 27 ahead), CRITICAL median **18**, **100% caught** |
 | Alerts raised exactly once | 345 alerts, 345 distinct (engine × level) |
 | Producer throughput | ~28,000 msgs/s unthrottled, single process |
-| Honest limitation | FD003 detection 56%: second fault mode found (F14), improving it is your Milestone T1 |
+| Detection | 100% of FD001 and FD003 engines warned before failure (FD003 was 56% before the fix in Step 12) |
 """),
         learn("Decisions at a glance", """
 | Decision | Chosen | Main alternative | Why |
@@ -228,12 +228,12 @@ Line by line, the important parts:
 - `healthcheck`: Compose knows when Kafka is actually ready, not just started."""),
         viz("terminal", "Set up the project yourself", "These are the exact commands (simulated output).", {
             "missions": [
-                {"task": "Clone the repo.", "accept": r"^git\s+clone\s+\S*turbofan-telemetry(\.git)?$", "out": "Cloning into 'turbofan-telemetry'...\nReceiving objects: 100% (41/41), done.", "hint": "git clone https://github.com/YuvrajDevs/turbofan-telemetry.git"},
-                {"task": "Enter it.", "accept": r"^cd\s+turbofan-telemetry/?$", "out": "", "hint": "cd turbofan-telemetry"},
+                {"task": "Clone the repo.", "accept": r"^git\s+clone\s+\S*tf-telemetry(\.git)?$", "out": "Cloning into 'tf-telemetry'...\nReceiving objects: 100% (41/41), done.", "hint": "git clone https://github.com/YuvrajDevs/tf-telemetry.git"},
+                {"task": "Enter it.", "accept": r"^cd\s+tf-telemetry/?$", "out": "", "hint": "cd tf-telemetry"},
                 {"task": "Create a virtual environment `.venv`.", "accept": r"^python3?\s+-m\s+venv\s+\.venv$", "out": "", "hint": "python -m venv .venv"},
                 {"task": "Activate it.", "accept": r"^(source|\.)\s+\.venv/bin/activate$", "out": "(.venv) $", "hint": "source .venv/bin/activate"},
                 {"task": "Install the pinned requirements.", "accept": r"^pip3?\s+install\s+-r\s+requirements\.txt$", "out": "Successfully installed pyspark-4.0.1 delta-spark-4.0.0 confluent-kafka-2.8.0 pandas-2.2.3 pyarrow-19.0.1 deltalake-0.25.5 streamlit-1.41.1 pytest-8.3.4", "hint": "pip install -r requirements.txt"},
-                {"task": "Run the unit tests.", "accept": r"^(python\s+-m\s+)?pytest(\s+-q)?(\s+tests/?)?$", "out": "..........                                   [100%]\n10 passed in 0.08s", "hint": "pytest -q"},
+                {"task": "Run the unit tests.", "accept": r"^(python\s+-m\s+)?pytest(\s+-q)?(\s+tests/?)?$", "out": "..............                               [100%]\n14 passed in 9.7s", "hint": "pytest -q"},
                 {"task": "Start Kafka (and Kafka UI) in the background.", "accept": r"^docker\s+compose\s+up\s+-d$|^docker-compose\s+up\s+-d$", "out": "[+] Running 2/2\n ✔ Container tt-kafka     Healthy\n ✔ Container tt-kafka-ui  Started", "hint": "docker compose up -d"},
                 {"task": "Check the daemon and containers are running.", "accept": r"^docker\s+(ps|compose\s+ps)$", "out": "NAME         IMAGE                  STATUS\ntt-kafka     apache/kafka:3.9.0     Up 20 seconds (healthy)\ntt-kafka-ui  provectuslabs/kafka-ui Up 18 seconds", "why": "If this fails with 'cannot connect to the Docker daemon', Docker Desktop isn't running (F1).", "hint": "docker ps"},
             ]}),
@@ -626,7 +626,7 @@ The dashboard uses **delta-rs** (`deltalake` package, written in Rust) to read t
 starts in a second. `@st.fragment(run_every=10)` re-renders the live section every 10 seconds. It shows engines reporting, critical/warning counts,
 alerts, dead letters, fleet health per minute and the engines closest to failure."""),
         learn("The repository layout", """```text
-turbofan-telemetry/
+tf-telemetry/
   telemetry/          cmapss.py · events.py · producer.py · admin.py · spark.py · report.py · cli.py
   telemetry/jobs/     bronze.py · silver.py · gold.py · run.py
   tests/              10 pure-Python unit tests (0.1 s, no Spark/Kafka)
@@ -655,7 +655,7 @@ the unit tests and the gold Spark job."""),
 - **Kafka**: 3+ brokers, replication factor 3, `min.insync.replicas=2`, schema registry with Avro/Protobuf and compatibility rules.
 - **Storage**: cloud object storage, table OPTIMIZE/compaction, retention and VACUUM policies, Unity Catalog permissions.
 - **Observability**: consumer lag, batch duration, dead-letter rate by reason, freshness, alert latency, with alerting.
-- **Alerts**: route to an incident/maintenance system; add maintenance-reset events; per-fault-mode health indices (T1).
+- **Alerts**: route to an incident/maintenance system; add maintenance-reset events; more fault types as they appear (same per-segment evaluation as Step 12).
 - **CI/CD**: integration test with Kafka in CI, deploy jobs with asset bundles/Terraform; secrets in a vault.
 """),
     ]))
@@ -675,11 +675,50 @@ For the missed (fan-fault) engines, s7/s12/s20/s21 move **up**. The index multip
 wear), so they cancel the rising sensors and the index goes **negative**. Open FD003-007 in the chart below.
 """),
         viz("enginechart", "See the fan fault", "Select FD003-007.", {"engines": ENGINES, "start": "FD003-007", "task": "Compare FD003-007 with any FD001 engine, then tune the sliders until all five FD001 engines meet the target (≥ 20 / ≥ 8 cycles)."}),
-        learn("Your milestones (from MILESTONES.md)", """
+        learn("Step 12: the fix, a fault-mode aware health index", """
+**1. Measure first.** `scripts/calibrate.py` replays every NASA engine through the same EWMA + thresholds as the stream
+and prints: engines warned, lead times, and warnings more than 125 cycles before failure (false alarms).
+
+**2. Find the fan signature** (end-of-life z-score vs healthy FD001, median):
+
+| Sensor | HPC-fault engines | Fan-fault engines |
+|---|---|---|
+| s7, s12 | −3.9, −4.1 | **+21.9, +26.0** |
+| s20, s21 | −3.6, −3.4 | **+5.0, +5.0** |
+| s15 | +3.7 | **−6.6** |
+
+**3. Compare designs with numbers:**
+
+| Design | FD003 warned | FD003 false alarms | Verdict |
+|---|---|---|---|
+| v1 HPC only | 56% | 2 | misses fan faults |
+| mean absolute deviation | 100% | 16 | too many false alarms, later warnings on FD001 |
+| max(HPC, fan) | 100% | 11 | fan sensors move 20+ std devs, so it fires too early |
+| **max(HPC, 0.4 × fan)** | **100%** | **2** | chosen |
+
+**4. Don't fool yourself:** the 0.4 was chosen on **odd-numbered** engines and checked on the **even** ones
+(50/50 caught, same lead times). Tuning and testing on the same engines would overstate how good it is.
+
+**5. Bonus:** whichever pattern wins is the **fault type**. Silver gets `fault_mode` (HPC / FAN) and every alert carries
+it. The 44 engines v1 missed are exactly the 44 labelled FAN.
+
+**6. Keep Spark and Python identical:** silver computes the index as a Spark expression, gold and the tests use Python.
+`tests/test_spark_parity.py` checks both give the same numbers.
+
+**7. Re-run everything:** 14 tests pass; the crash demo still gives 54,787/54,787 with 0 missing and 0 duplicates;
+alerts rose from 345 to 425 because the fan-fault engines now alert.
+"""),
+        mcq("Why was the fan weight tuned on odd-numbered engines and checked on even-numbered ones?", [
+            "Odd engines have more data",
+            "To check the setting works on engines it was not tuned on, so the reported result isn't flattering itself",
+            "Spark processes odd partitions first",
+            "It makes the code faster",
+        ], 1, "This is held-out validation: the same idea as a train/test split."),
+        learn("Your next milestones (from MILESTONES.md)", """
 | # | Task | What you'll be able to say |
 |---|---|---|
-| **T1 ★** | Make the health index fault-mode aware (e.g. absolute deviations, or max of an HPC index and a fan index), re-calibrate with the lead-time table | "I found a second failure mode by segment analysis and raised FD003 detection from 56% to X%" |
-| **T2 ★** | Load test (`produce --rate 0 --loops 20 --no-manifest`), tune partitions / `TT_MAX_OFFSETS` / trigger, fill `docs/capacity-plan.md` | "It sustains N events/s on 8 cores at p95 Y s; for 10k engines we'd need…" |
+| T1 ✅ | Done (Step 12). Re-run `scripts/calibrate.py`, change `FAN_WEIGHT`, watch the table move | "I found a second failure mode by segment analysis and raised FD003 detection from 56% to 100%" |
+| T2 ✅ | Done (`scripts/loadtest.py`, `docs/capacity-plan.md`). Re-run on your laptop and use your numbers | "On 4 cores it keeps up at 3,000 events/s; Delta commit history showed the stateful gold step was the bottleneck, and without it p95 latency fell from 24.6 s to 10.8 s, so gold runs as its own job" |
 | T3 | Schema version 2 with a new optional field | schema evolution, backward/forward compatibility |
 | T4 | Global dedupe with MERGE on event_id, cost comparison | when watermark dedupe isn't enough |
 | T5 | Maintenance events that reset state | ordering and state design |
@@ -690,8 +729,8 @@ Commit each milestone yourself with a clear message: your GitHub history is part
 """),
         talk("*\"How do you know your alerts are any good?\"*", """
 - **Calibrated on ground truth:** C-MAPSS runs engines to failure, so lead time (cycles between alert and failure) is measurable.
-- Swept α and thresholds and chose α = 0.2, 1.5/2.5: WARNING median 44 cycles ahead (p10 27), CRITICAL 19 (p10 12), 100% of FD001 engines caught.
-- **Checked per segment:** FD003 only 56%, traced to a second fault mode with opposite sensor directions (F14). Fix planned and measurable.
+- Swept α and thresholds and chose α = 0.2, 1.5/2.5: WARNING median 44 cycles ahead (p10 25), CRITICAL 18 (p10 11), 100% of FD001 engines caught.
+- **Checked per segment:** FD003 was only 56%, traced to a second fault mode with opposite sensor directions (F14). Fixed with a fault-mode aware index tuned on half the engines and validated on the other half: 100% of both fleets, same false-alarm rate.
 - Next: measure false alarms on healthy periods, and monitor detection quality over time (drift).
 """),
         talk("*\"Tell me about a time you debugged a difficult data issue.\"* (use F10)", """
