@@ -7,7 +7,7 @@ const proj = (n, note) => ({ title: `Project block: ${n}`, href: '#projects', no
 const mock = (k, t) => ({ title: t, href: `#interview-${k}`, note: 'Timed, no hints' });
 
 module.exports = [
-  { day: 1, title: 'Orientation + toolbox basics', focus: 'What DEs do, how your Salesforce work maps to it, computers/networks/APIs from zero and the terminal.', items: [L('o1'), L('o2'), L('t1'), L('t2'), L('t6')] },
+  { day: 1, title: 'Start here + first tools', focus: 'What data engineers do, how your Salesforce work fits in, how computers store and send data, and typing your first commands.', items: [L('o1'), L('o2'), L('t1'), L('t2'), L('t6')] },
   { day: 2, title: 'How it all connects + SQL basics', focus: 'Project setup, Git, logins and connections, the end-to-end platform map, then SELECT and NULLs.', items: [L('t3'), L('t4'), L('t5'), L('t7'), L('s1'), L('s2')] },
   { day: 3, title: 'Aggregates and joins', focus: 'GROUP BY, HAVING, every join type, fan-out bugs, query order.', items: [L('s3'), L('s4'), L('s5'), gym('sql', 'Query Gym set'), review] },
   { day: 4, title: 'Dates, CTEs, ranking windows', focus: 'Readable multi-step SQL and top-N per group.', items: [L('s6'), L('a1'), L('a2'), gym('sql', 'Query Gym set'), proj('set up', 'Create the Project 1 repo, venv and README skeleton')] },

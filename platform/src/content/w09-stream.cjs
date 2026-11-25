@@ -118,6 +118,36 @@ result = (last3.groupBy("engine_id")
         - **Scale numbers**: say them (events/s, bytes/event, daily volume) and size partitions from them.
       `),
     ]),
+    lesson('t8', 'Running real Spark, Kafka and Airflow yourself', 15, [
+      learn('What this arcade simulates, and how to run the real thing', `
+        **In this arcade**
+        - SQL runs on **SQLite** compiled to WebAssembly, a real database engine inside your browser.
+        - Python runs on **Pyodide**: real CPython in the browser.
+        - PySpark runs on a **teaching implementation of the PySpark API** written in Python. Your code is identical to real PySpark; the engine underneath is single-machine. Real Spark needs a Java runtime and runs as many processes, which a browser can't host.
+
+        **The real thing on your laptop (free):**
+        | Tool | How |
+        |---|---|
+        | Spark | Install Java 17, «pip install pyspark», run «pyspark» or «spark-submit». Spark UI at «http://localhost:4040» while a job runs |
+        | Delta Lake | «pip install delta-spark» |
+        | Kafka | Docker Desktop + a «docker-compose.yml» with a Kafka image → «docker compose up -d»; CLI tools inside the container |
+        | Airflow | «pip install apache-airflow» then «airflow standalone» → web UI at «http://localhost:8080» |
+        | Postgres | Docker: «docker run -p 5432:5432 -e POSTGRES_PASSWORD=dev postgres» |
+        | Cloud | **Databricks Free Edition** (browser, no install), Azure/AWS free tiers |
+
+        Docker in one line: it runs prepackaged software (an **image**) as an isolated **container**, so "install Kafka" becomes one command instead of an afternoon.
+      `),
+      viz('terminal', 'Stand up Kafka and stream a message', '', {
+        missions: [
+          { task: 'Start the services defined in «docker-compose.yml» in the background.', accept: '^docker\\s+compose\\s+up\\s+-d$|^docker-compose\\s+up\\s+-d$', out: '[+] Running 2/2\n ✔ Container kafka   Started\n ✔ Container kafka-ui Started', hint: 'docker compose up -d' },
+          { task: 'Create a topic «engine-telemetry» with 3 partitions (inside the container you can run «kafka-topics»).', accept: '^kafka-topics(\\.sh)?\\s+.*--create.*--topic\\s+engine-telemetry.*--partitions\\s+3|^kafka-topics(\\.sh)?\\s+.*--partitions\\s+3.*--topic\\s+engine-telemetry.*--create', out: 'Created topic engine-telemetry.', hint: 'kafka-topics --bootstrap-server localhost:9092 --create --topic engine-telemetry --partitions 3' },
+          { task: 'Read the topic from the beginning with the console consumer.', accept: '^kafka-console-consumer(\\.sh)?\\s+.*--topic\\s+engine-telemetry.*--from-beginning|^kafka-console-consumer(\\.sh)?\\s+.*--from-beginning.*--topic\\s+engine-telemetry', out: '{"engine_id": 7, "temperature_c": 101.4}\n{"engine_id": 12, "temperature_c": 84.0}', hint: 'kafka-console-consumer --bootstrap-server localhost:9092 --topic engine-telemetry --from-beginning' },
+          { task: 'Start Airflow locally with its web UI.', accept: '^airflow\\s+standalone$', out: 'standalone | Airflow is ready\nstandalone | Login with username: admin  password: ********\nWebserver at http://localhost:8080', why: 'Then open the browser: your DAGs appear as graphs you can trigger and watch.', hint: 'airflow standalone' },
+        ],
+      }),
+      mcq('While a local Spark job runs, where is its Spark UI?', ['https://spark.apache.org', 'http://localhost:4040', 'In GitHub', 'There is none locally'], 1),
+      tf('Code written against the PySpark DataFrame API in this arcade runs unchanged on Databricks.', true, 'Same API. Only the engine underneath differs (and «spark.table» names would point at real catalog tables).'),
+    ]),
     lesson('r5', 'Lab: Kafka internals in code', 20, [
       learn('What Kafka does under the hood', `
         - **Partitioner:** «partition = hash(key) % num_partitions» (Kafka uses murmur2; we use crc32 here). Same key, same partition. **Changing the partition count changes the mapping** for new messages, which is why you size partitions up front.

@@ -170,20 +170,149 @@ V.uitour = function (root, p, { h, done }) {
   draw();
 };
 
-// ------------------------------------------------------------------ TERMINAL SIMULATOR
+// ------------------------------------------------------------------ TERMINAL (guided: explain every part, then you type it)
+// Dictionary of programs, subcommands and flags used anywhere in DE Arcade. Every command shown is broken into
+// these parts so nothing is ever typed without being explained first.
+const PROGRAMS = {
+  pwd: 'Shows which folder you are in right now ("print working directory").',
+  ls: 'Lists the files and folders in the folder you are in.',
+  dir: 'The Windows version of ls: lists files.',
+  cd: 'Moves you into another folder, like double-clicking a folder ("change directory").',
+  mkdir: 'Makes a new folder ("make directory").',
+  head: 'Shows only the first few lines of a file. Safe even for huge files.',
+  wc: 'Counts things in a file: lines, words or letters ("word count").',
+  grep: 'Searches a file and shows only the lines that contain some text.',
+  git: 'Git: the tool that saves versions of your code, so you can go back and share it.',
+  python: 'Runs Python.', python3: 'Runs Python (version 3).',
+  pip: 'pip: downloads and installs Python libraries (ready-made code other people wrote).', pip3: 'pip for Python 3: installs libraries.',
+  source: 'Runs a small setup script inside this terminal. Here it switches on the project\'s private Python setup.',
+  pytest: 'Runs the project\'s automatic checks ("tests") and tells you if anything is broken.',
+  'spark-submit': 'Starts a Spark program (a .py file). Spark spreads big data work over many CPU cores or computers.',
+  docker: 'Docker: runs ready-made software in a sealed box called a container, so you don\'t have to install it yourself.',
+  'docker-compose': 'Older way of writing "docker compose".',
+  'kafka-topics': 'Kafka\'s tool for creating and checking topics. (A topic is like a named mailbox that messages go into.)',
+  'kafka-topics.sh': 'Kafka\'s tool for creating and checking topics (a topic is a named mailbox for messages).',
+  'kafka-console-consumer': 'Kafka\'s tool that reads messages from a topic and prints them on your screen.',
+  'kafka-console-consumer.sh': 'Kafka\'s tool that reads messages from a topic and prints them on your screen.',
+  'kafka-consumer-groups': 'Kafka\'s tool that shows who is reading a topic and how far behind they are.',
+  'kafka-consumer-groups.sh': 'Kafka\'s tool that shows who is reading a topic and how far behind they are.',
+  airflow: 'Airflow: a tool that runs data jobs on a schedule, in the right order.',
+  databricks: 'The Databricks tool: lets your terminal talk to your Databricks account.',
+  kinit: 'Logs you in to a company Hadoop cluster (it uses a system called Kerberos instead of typing passwords every time).',
+  hdfs: 'Hadoop\'s file tool: works with files stored across many computers.', yarn: 'Hadoop\'s tool for the jobs running on the cluster.',
+  streamlit: 'Streamlit: shows a Python program as a web page (a dashboard).',
+  './scripts/demo.sh': 'Runs the project\'s demo script. "./" means "the file here in this folder".', bash: 'Runs a script file.',
+};
+const SUBS = {
+  'git clone': 'download a copy of a project from GitHub onto your computer',
+  'git status': 'show which files you changed since you last saved a version',
+  'git checkout': 'switch to a different branch (with -b: make a new one)', 'git switch': 'switch to a different branch (with -c: make a new one)',
+  'git add': 'pick a change to include in your next saved version',
+  'git commit': 'save a version of your picked changes, with a short note',
+  'git push': 'upload your saved versions to GitHub',
+  'docker compose': 'Docker\'s helper that starts every container listed in the file docker-compose.yml',
+  'compose up': 'start them', 'docker ps': 'list the containers that are running', 'compose ps': 'list this project\'s containers',
+  'pip install': 'install libraries', 'airflow standalone': 'start Airflow and its web page on your computer, for practice',
+  'databricks bundle': 'work with this project\'s jobs and code',
+  'bundle validate': 'check the settings for mistakes', 'bundle deploy': 'upload the code and job settings to Databricks',
+  'bundle run': 'start one of the jobs', 'hdfs dfs': 'do a file action on the cluster\'s storage',
+  'hdfs fsck': 'check files are healthy and show how they are stored', 'yarn logs': 'show the log (messages) of a finished job',
+  'streamlit run': 'start the dashboard from this .py file',
+  'python -m': 'run a Python tool by its name (instead of by file path)', 'python3 -m': 'run a Python tool by its name',
+  'telemetry.cli download': 'our project\'s command to download the NASA data',
+  'telemetry.cli create-topic': 'our project\'s command to create the Kafka topic',
+  'telemetry.cli describe-topic': 'our project\'s command to show the topic\'s details',
+  'telemetry.cli produce': 'our project\'s command to start sending engine readings into Kafka',
+  'telemetry.cli verify': 'our project\'s command to check no data was lost or doubled',
+  'telemetry.cli report': 'our project\'s command to print a health summary of the pipeline',
+};
+const FLAGS = {
+  '-n': 'how many lines (the number comes next)', '-l': 'count lines only', '-p': 'also create any folders in between if they are missing',
+  '-m': 'a short note about this saved version comes next', '-u': 'remember where this branch lives on GitHub, so next time a plain "git push" is enough',
+  '-b': 'make the branch first', '-c': 'make the branch first', '-d': 'run in the background, so you get your terminal back',
+  '-r': 'read the list of libraries from the file that comes next', '-q': 'quiet: short output', '-h': 'show sizes in easy units (K, M, G)',
+  '-t': 'which copy to use: test or production (live)', '-A': 'all changes',
+  '-put': 'copy a file from your computer onto the cluster', '-copyFromLocal': 'copy a file from your computer onto the cluster',
+  '-mkdir': 'make a folder on the cluster', '-du': 'how much space it takes', '-files': 'list each file', '-blocks': 'show the pieces each file is split into',
+  '-applicationId': 'which job (its id comes next; Spark printed it when the job started)',
+  '--bootstrap-server': 'which Kafka to talk to (its address comes next)', '--create': 'make something new (here: a topic)',
+  '--topic': 'the topic\'s name comes next', '--partitions': 'how many lanes to split the topic into. More lanes = more readers can work at the same time',
+  '--from-beginning': 'read every old message too, not just new ones', '--partition': 'read only one lane (its number comes next)',
+  '--max-messages': 'stop after this many messages', '--property': 'an extra setting comes next', '--describe': 'show details',
+  '--group': 'the name of the group of readers comes next', '--master': 'where Spark should run (comes next)',
+  '--deploy-mode': 'where the main Spark program runs: "cluster" means on the cluster, so it keeps going if your laptop disconnects',
+  '--rate': 'how many readings to send per second (0 = as fast as possible)', '--chaos': 'on purpose, also send some duplicate, late and broken messages, to test the pipeline',
+};
+const ARGS = {
+  'localhost:9092': '"localhost" = this computer; 9092 = the door number Kafka listens on',
+  'engine-telemetry': 'the topic name we chose (engine sensor readings)',
+  'requirements.txt': 'the file that lists every library the project needs, with exact versions',
+  '.venv': 'the name of the folder that will hold the project\'s private Python setup',
+  '.venv/bin/activate': 'the script that switches this terminal to the project\'s private Python setup',
+  'origin': 'GitHub (the online copy of your project is nicknamed "origin")',
+  'local[*]': 'run on this computer, using all its CPU cores', 'yarn': 'run on the company\'s Hadoop cluster', 'cluster': 'on the cluster',
+  'print.key=true': 'also show each message\'s key (the label used to sort it into a lane)',
+  '|': 'pipe: pass the result of the left command into the right command',
+  '.': 'everything in this folder', 'test': 'the test copy, not the live one', 'claims.csv': 'the file to look at',
+  'warranty-pipeline': 'the folder name (your project folder)', 'turbofan-telemetry': 'the project folder that git clone created',
+  venv: 'Python\'s built-in tool that makes a private Python setup just for this project',
+  'telemetry.cli': 'our project\'s command file (telemetry/cli.py)', claims_daily: 'the name of the job',
+};
+function tokenize(cmd) { return (cmd.match(/"[^"]*"|'[^']*'|\S+/g) || []); }
+function explainCmd(cmd) {
+  const t = tokenize(cmd); const rows = []; let prevFlag = null;
+  for (let i = 0; i < t.length; i++) {
+    const tok = t[i], two = i ? `${t[i - 1]} ${tok}` : '', three = i > 1 ? `${t[i - 2]} ${t[i - 1]} ${tok}` : '';
+    let what;
+    if (i === 0 || t[i - 1] === '|') { what = PROGRAMS[tok] || 'the program to run'; prevFlag = null; }
+    else if (SUBS[three]) { what = SUBS[three]; prevFlag = null; }
+    else if (SUBS[two]) { what = SUBS[two]; prevFlag = null; }
+    else if (tok.startsWith('-') && tok !== '-') { what = FLAGS[tok] || 'an option (flag) that changes how the command behaves'; prevFlag = tok; }
+    else if (ARGS[tok]) { what = ARGS[tok]; prevFlag = null; }
+    else if (t[0] === 'git' && (t[i - 1] === 'origin' || prevFlag === '-b' || prevFlag === '-c')) { what = 'the branch name (a separate line of work, e.g. feat/… for a feature)'; prevFlag = null; }
+    else if (/^["']/.test(tok)) { what = prevFlag === '-m' ? 'the commit message (in quotes because it has spaces)' : 'text in quotes (kept together because it has spaces)'; prevFlag = null; }
+    else if (prevFlag) { what = `the value for ${prevFlag}`; prevFlag = null; }
+    else if (/^(https?:|git@)/.test(tok)) what = 'the address (URL) of the repository';
+    else if (/\.py$/.test(tok)) what = 'the Python file to run';
+    else if (/\.(csv|txt|json)$/.test(tok)) what = 'the file to work on';
+    else if (tok.includes('/')) what = 'a path: where a folder or file is';
+    else if (/^\d+$/.test(tok)) what = 'a number';
+    else what = SUBS[`${t[0]} ${tok}`] || 'a name or value the command works on';
+    rows.push([tok, what]);
+  }
+  return rows;
+}
+V.explainCmd = explainCmd;
+
 V.terminal = function (root, p, { h, done }) {
   const missions = p.missions || [];
+  const recall = !!p.recall;               // recall mode hides the command until asked (for later review)
   let i = 0;
   const screen = h('pre', { class: 'term', 'aria-live': 'polite' });
-  const task = h('div', { class: 'goal' });
-  const inp = h('input', { class: 'term-in mono', id: 'term-' + Math.random().toString(36).slice(2, 7), autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', 'aria-label': 'Type a command' });
-  const print = (s, cls) => { const sp = h('span', { class: cls || '' }, s + '\n'); screen.append(sp); screen.scrollTop = screen.scrollHeight; };
-  const showTask = () => {
-    if (i >= missions.length) { task.replaceChildren(h('span', { class: 'goal-k' }, 'DONE'), h('span', null, 'All steps complete.')); inp.disabled = true; done(p.doneMsg || 'Environment ready.'); return; }
-    const m = missions[i];
-    task.replaceChildren(h('span', { class: 'goal-k' }, `STEP ${i + 1}/${missions.length}`), h('span', { html: mdi(m.task) }));
+  const card = h('div', { class: 'term-step' });
+  const inp = h('input', { class: 'term-in mono', id: 'term-' + Math.random().toString(36).slice(2, 7), autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', 'aria-label': 'Type a command', placeholder: 'type the command shown above, then press Enter' });
+  const print = (s, cls) => { screen.append(h('span', { class: cls || '' }, s + '\n')); screen.scrollTop = screen.scrollHeight; };
+  const cmdOf = m => m.cmd || m.hint || '';
+  const showStep = () => {
+    if (i >= missions.length) {
+      card.replaceChildren(h('div', { class: 'goal' }, h('span', { class: 'goal-k' }, 'DONE'), h('span', null, 'All steps complete. Scroll the terminal to review what each command printed.')));
+      inp.disabled = true; done(p.doneMsg || 'Done.'); return;
+    }
+    const m = missions[i]; const cmd = cmdOf(m);
+    const parts = explainCmd(cmd);
+    const showParts = () => h('div', { class: 'term-explain' },
+      h('div', { class: 'term-cmd-show mono' }, ...parts.map(([tok]) => h('span', { class: 'term-tok' }, tok))),
+      h('table', { class: 'vt term-parts' }, h('thead', null, h('tr', null, h('th', null, 'Part'), h('th', null, 'What it means'))),
+        h('tbody', null, parts.map(([tok, what]) => h('tr', null, h('td', { class: 'mono' }, tok), h('td', { html: mdi(what) }))))));
+    const reveal = h('div');
+    if (recall) reveal.append(h('button', { class: 'btn small', onclick: () => reveal.replaceChildren(showParts()) }, 'Show me the command'));
+    else reveal.append(showParts());
+    card.replaceChildren(
+      h('div', { class: 'goal' }, h('span', { class: 'goal-k' }, `STEP ${i + 1}/${missions.length}`), h('span', { html: mdi(m.task) })),
+      ...(m.why_first ? [h('div', { class: 'vnote', html: mdi(m.why_first) })] : []),
+      reveal,
+      h('div', { class: 'row', style: { alignItems: 'center', gap: '10px', flexWrap: 'wrap' } }, h('button', { class: 'btn small', onclick: () => { inp.value = cmd; inp.focus(); } }, 'Type it for me'), h('span', { class: 'muted small' }, 'then press Enter. Typing it yourself helps you remember it.')));
   };
-  const hintBtn = h('button', { class: 'btn small ghost', onclick: () => { if (missions[i]) print('hint: ' + missions[i].hint, 'term-hint'); } }, 'Hint');
   inp.addEventListener('keydown', e => {
     if (e.key !== 'Enter') return;
     const cmd = inp.value.trim(); inp.value = '';
@@ -191,12 +320,13 @@ V.terminal = function (root, p, { h, done }) {
     print((p.prompt || '$') + ' ' + cmd, 'term-cmd');
     if (cmd === 'clear') { screen.replaceChildren(); return; }
     const m = missions[i];
-    if (m && new RegExp(m.accept, 'i').test(cmd)) { if (m.out) print(m.out); if (m.why) print('# ' + m.why, 'term-why'); i++; showTask(); }
-    else if (m) print(m.miss || `command not recognised for this step. Type "Hint" for help.`, 'term-err');
+    if (m && new RegExp(m.accept, 'i').test(cmd)) { if (m.out) print(m.out); if (m.why) print('# ' + m.why, 'term-why'); i++; showStep(); }
+    else if (m) print(`Not quite. Compare with the command above, letter by letter (spaces and dashes matter).`, 'term-err');
   });
-  print(p.banner || 'Practice terminal. Type the command for each step and press Enter.', 'term-why');
-  root.append(task, h('div', { class: 'term-wrap' }, screen, h('div', { class: 'term-line' }, h('span', { class: 'mono' }, p.prompt || '$'), inp, hintBtn)));
-  showTask();
+  print(p.banner || 'Practice terminal: nothing here touches a real machine.', 'term-why');
+  root.append(h('div', { class: 'vnote' }, 'Each step shows a command and explains every part of it. Read it, type it (or tap "Type it for me"), then press Enter.'),
+    card, h('div', { class: 'term-wrap' }, screen, h('div', { class: 'term-line' }, h('span', { class: 'mono' }, p.prompt || '$'), inp)));
+  showStep();
 };
 
 // ------------------------------------------------------------------ NAPKIN MATH (estimate with tolerance)

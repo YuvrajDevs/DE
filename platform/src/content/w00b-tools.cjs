@@ -1,259 +1,273 @@
 const { learn, mcq, tf, multi, match, order, viz, scenario, talk, world, lesson } = require('./_h.cjs');
 
-module.exports = world('tools', 'Toolbox: how it is all set up and connected', 'absolute basics',
-  'From zero: what computers, networks and APIs are, the terminal, setting up a project, Git, logins and connections, a tour of every UI you will use, and a clickable end-to-end platform map.',
+module.exports = world('tools', 'Toolbox: the basics before the basics', 'absolute basics',
+  'From zero, in plain words: how computers store data, how to type commands, how to set up a project, how Git works, what the tools look like, how everything connects, and how logins work.',
   [
-    lesson('t1', 'Computers, data and networks from zero', 15, [
-      learn('The building blocks', `
-        **Data sizes** (you will say these in every design interview):
-        | Unit | Size | Feels like |
+    lesson('t1', 'Computers, data and the internet, from zero', 15, [
+      learn('How big is data?', `
+        Data is measured in **bytes**. One byte is about one letter.
+
+        | Size | Roughly | Example |
         |---|---|---|
-        | 1 KB | 1,000 bytes | one claim record as JSON |
-        | 1 MB | 1,000 KB | a photo, ~5,000 claim rows as CSV |
-        | 1 GB | 1,000 MB | a few million rows |
-        | 1 TB | 1,000 GB | billions of rows: needs distributed processing |
-        | 1 PB | 1,000 TB | a large enterprise lake |
+        | 1 KB (kilobyte) | 1,000 bytes | one claim record |
+        | 1 MB (megabyte) | 1,000 KB | a photo, or 5,000 rows in a spreadsheet |
+        | 1 GB (gigabyte) | 1,000 MB | a few million rows |
+        | 1 TB (terabyte) | 1,000 GB | billions of rows: too big for one laptop |
+        | 1 PB (petabyte) | 1,000 TB | a big company's whole data store |
 
-        **A computer has four resources:** CPU (does calculations, several **cores** working in parallel), RAM (fast, temporary working memory), disk/SSD (slow, permanent storage) and network (talks to other machines). Big data problems are about one of these running out: data too big for RAM, work too slow for one CPU, files too slow to move over the network.
-
-        **Files vs tables vs databases:** a *file* is bytes on disk (CSV, Parquet). A *table* is rows and columns with a schema. A *database* is software that stores tables and answers queries (Postgres, Salesforce's database, Snowflake).
-
-        **Client and server:** your laptop (client) sends a request to a server program listening on a **host** (address) and **port** (door number). Postgres listens on 5432, HTTPS on 443, Kafka on 9092.
-
-        **API:** a defined way for programs to talk. A REST API is "send an HTTPS request to a URL, get JSON back". Salesforce's REST API is how a pipeline extracts records without a human clicking anything.
+        When data gets to the TB range, **one computer is not enough**. That's why tools like Spark exist: they split the work across many computers.
       `),
-      match('Match each term to what it is.', [
-        ['Host + port', 'Where a server program is listening (e.g. db.internal:5432)'],
-        ['API', 'A defined interface programs use to talk to each other'],
-        ['RAM', 'Fast temporary working memory'],
-        ['Disk / object storage', 'Slow but permanent, cheap storage'],
+      learn('The four parts of a computer that matter', `
+        | Part | What it does | Kitchen version |
+        |---|---|---|
+        | **CPU** | does the calculations. It has several **cores**, which can work at the same time | the cooks |
+        | **RAM (memory)** | fast, temporary space for what you're working on now. Emptied when the computer turns off | the counter top |
+        | **Disk** | slow, permanent storage | the fridge and cupboards |
+        | **Network** | talks to other computers | the delivery van |
+
+        Most "big data" problems are one of these running out: the data doesn't fit on the counter (RAM), there aren't enough cooks (CPU), or the van is too slow (network).
+      `),
+      learn('Files, tables and databases', `
+        - A **file** is data saved on disk, like «claims.csv» or a spreadsheet.
+        - A **table** is data in rows and columns, where each column has a type (number, text, date).
+        - A **database** is a program that stores tables and answers questions about them. You ask in **SQL**. Salesforce has a database inside it.
+      `),
+      learn('How computers talk to each other', `
+        When you open a website, your laptop (the **client**) sends a request to another computer (the **server**).
+
+        To find the right program on that server you need two things:
+        - its **address** (called the **host**), like «google.com» or «localhost» (*this same computer*)
+        - a **port**: a door number, because one computer runs many programs. Websites use door 443, the Postgres database uses 5432, Kafka uses 9092.
+
+        So «localhost:9092» just means *"this computer, door 9092"*.
+
+        An **API** is a set of rules programs use to ask each other for data. Salesforce's API is how a program can copy out records automatically, without a person clicking export.
+      `),
+      match('Match each word to what it means.', [
+        ['localhost:9092', 'This computer, door number 9092'],
+        ['API', 'Rules programs use to ask each other for data'],
+        ['RAM', 'Fast, temporary working space'],
+        ['Disk', 'Slow but permanent storage'],
       ]),
-      mcq('A CSV of 400 million rows is ~80 GB. Your laptop has 16 GB of RAM. What happens if you load it all with pandas?', ['It loads fine', 'It runs out of memory: process it in chunks or use a distributed engine like Spark', 'It loads but only the first 16 GB', 'pandas compresses it automatically'], 1),
-      order('Order from smallest to largest.', ['1 KB', '1 MB', '1 GB', '1 TB', '1 PB']),
-      tf('An API call from a pipeline usually needs some form of authentication, like a token.', true, 'Pipelines identify themselves with tokens, OAuth client credentials or certificates, never with a person\'s password.'),
+      mcq('A file is 80 GB. Your laptop has 16 GB of RAM. What happens if you try to load all of it into memory at once?', ['It works fine', 'It runs out of memory. You read it in smaller pieces, or use a tool like Spark that splits the work', 'It loads only the first 16 GB', 'The file shrinks automatically'], 1),
+      order('Put these sizes from smallest to largest.', ['1 KB', '1 MB', '1 GB', '1 TB', '1 PB']),
+      tf('When a program asks Salesforce\'s API for data, it has to prove who it is, like logging in.', true, 'Programs use special keys or tokens instead of a person\'s password. More on this in the last lesson of this stage.'),
     ]),
-    lesson('t2', 'Terminal survival kit', 15, [
-      learn('The terminal is just typing commands', `
-        The **terminal** (command line, shell) is a text way to tell the computer what to do. On Mac/Linux it is "Terminal" (bash/zsh); on Windows use **PowerShell** or **WSL** (Linux inside Windows, recommended for data work).
+    lesson('t2', 'The terminal: typing commands', 18, [
+      learn('What the terminal is', `
+        The **terminal** is a window where you type instructions instead of clicking. You type a command, press Enter, and the computer answers with text.
 
-        | Command | Does |
+        - On a Mac it's called **Terminal**.
+        - On Windows, use **WSL** (a free add-on that gives you a Linux terminal inside Windows; data tools work best there).
+
+        You don't need to learn much. About 10 commands cover most of what a data engineer types:
+
+        | Type this | It does |
         |---|---|
-        | «pwd» | print the folder you are in |
-        | «ls» (Windows: «dir») | list files |
-        | «cd folder», «cd ..» | move into / out of a folder |
-        | «mkdir name» | make a folder |
-        | «cat file», «head -n 5 file» | print a file / its first lines |
-        | «grep "Approved" claims.csv» | find lines containing text |
-        | «wc -l file» | count lines |
-        | «cmd1 | cmd2» | pipe: output of one into the next |
-        | «python script.py» | run a Python file |
-        | «export NAME=value» | set an environment variable |
-
-        You don't need to master the shell. Around 15 commands cover 90% of daily data engineering use.
+        | «pwd» | shows which folder you are in |
+        | «ls» | lists the files in this folder |
+        | «cd foldername» | goes into a folder («cd ..» goes back out) |
+        | «mkdir foldername» | makes a new folder |
+        | «head claims.csv» | shows the first lines of a file |
+        | «python myfile.py» | runs a Python file |
       `),
-      viz('terminal', 'Practise in a safe terminal', 'Nothing here touches a real machine. Type each command and press Enter.', {
-        missions: [
-          { task: 'Show which folder you are in.', accept: '^pwd$', out: '/home/you', hint: 'pwd' },
-          { task: 'Create a folder called «warranty-pipeline».', accept: '^mkdir\\s+warranty-pipeline$', out: '', hint: 'mkdir warranty-pipeline' },
-          { task: 'Move into it.', accept: '^cd\\s+warranty-pipeline/?$', out: '', hint: 'cd warranty-pipeline' },
-          { task: 'List the files (there is a «claims.csv» already).', accept: '^(ls|ls -l|ls -la|dir)$', out: 'claims.csv  README.md', hint: 'ls' },
-          { task: 'Print the first 3 lines of «claims.csv».', accept: '^head\\s+(-n\\s*)?-?3\\s+claims\\.csv$', out: 'claim_id,dealer_id,claim_amount,status\n1,4,124500.00,Approved\n2,7,88000.50,Rejected', hint: 'head -n 3 claims.csv' },
-          { task: 'Count how many lines it has.', accept: '^wc\\s+-l\\s+claims\\.csv$', out: '98 claims.csv', hint: 'wc -l claims.csv' },
-          { task: 'Find the lines containing «Approved» and count them using a pipe.', accept: '^grep\\s+["\']?Approved["\']?\\s+claims\\.csv\\s*\\|\\s*wc\\s+-l$', out: '41', why: 'The pipe | feeds grep\'s output into wc. Small tools combined.', hint: 'grep "Approved" claims.csv | wc -l' },
-        ],
-      }, 'You just used the shell the way data engineers do: navigate, inspect a file, filter and count.'),
-      mcq('You want to peek at the header of a 30 GB CSV without opening it in Excel. Command?', ['cat bigfile.csv', 'head -n 5 bigfile.csv', 'rm bigfile.csv', 'open bigfile.csv'], 1, '«cat» would print all 30 GB. «head» reads only the start.'),
-      tf('Data engineering work is done only in the terminal.', false, 'The terminal is for setup, git, running tests and deploying. Most of the day is spent in an IDE/notebook, SQL editors and web UIs.'),
-    ]),
-    lesson('t3', 'Set up a data engineering project from zero', 18, [
-      learn('What "setting up" actually means', `
-        A project is a **folder of code in Git** plus an **environment** with the right tools installed. Typical local setup (one-time, ~30 minutes):
+      learn('Anatomy of a command', `
+        Commands look scary at first. They're built from the same few parts:
 
-        1. Install **Python** (3.11+), **Git**, **VS Code**, and for Spark a **Java** runtime (JDK 17). Docker Desktop if you want Kafka/Postgres locally.
-        2. «git clone» the repo (or «git init» a new one).
-        3. Create a **virtual environment**, an isolated set of Python packages for this project: «python -m venv .venv», then activate it.
-        4. «pip install -r requirements.txt» installs the libraries (pyspark, pandas, pytest, requests…).
-        5. Put secrets in a «.env» file (never committed) or use your company's vault.
-        6. Run tests («pytest») and the pipeline locally on sample data.
+        | Part | What it is | Example |
+        |---|---|---|
+        | **program** | the tool you are using | «head», «git», «python» |
+        | **flag** (also called an option) | a switch that changes what the tool does. It starts with a dash «-» | «-n» |
+        | **value** | the thing the program or flag works on | «3», «claims.csv» |
+
+        Example: «head -n 3 claims.csv»
+        - «head» → the program: *show the start of a file*
+        - «-n 3» → the flag «-n» means *number of lines*, and «3» is that number
+        - «claims.csv» → *which file*
+
+        In plain English: **"show me the first 3 lines of claims.csv."**
+
+        Some programs also have an **action word** after their name. Example: «git push»: the program is «git», the action is «push» (upload).
+
+        You never have to memorise flags. In every exercise here, each part is explained before you type it. On a real computer, adding «--help» to a command shows its options.
+      `),
+      viz('terminal', 'Practise in a safe terminal', 'Nothing here touches a real computer.', {
+        missions: [
+          { task: 'Find out which folder you are in.', accept: '^pwd$', out: '/home/you', hint: 'pwd' },
+          { task: 'Make a new folder called «warranty-pipeline».', accept: '^mkdir\\s+warranty-pipeline$', out: '', hint: 'mkdir warranty-pipeline' },
+          { task: 'Go into that folder.', accept: '^cd\\s+warranty-pipeline/?$', out: '', hint: 'cd warranty-pipeline' },
+          { task: 'See what files are inside (someone already put a «claims.csv» there).', accept: '^(ls|ls -l|ls -la|dir)$', out: 'claims.csv  README.md', hint: 'ls' },
+          { task: 'Show only the first 3 lines of «claims.csv».', accept: '^head\\s+(-n\\s*)?-?3\\s+claims\\.csv$', out: 'claim_id,dealer_id,claim_amount,status\n1,4,124500.00,Approved\n2,7,88000.50,Rejected', why: 'The first line is the header: the column names.', hint: 'head -n 3 claims.csv' },
+          { task: 'Count how many lines the file has.', accept: '^wc\\s+-l\\s+claims\\.csv$', out: '98 claims.csv', why: '98 lines = 1 header line + 97 claims.', hint: 'wc -l claims.csv' },
+          { task: 'Find the lines that say «Approved», and count them. The «|» sign passes the result of the first command into the second.', accept: '^grep\\s+["\']?Approved["\']?\\s+claims\\.csv\\s*\\|\\s*wc\\s+-l$', out: '41', why: 'grep found the Approved lines, then wc counted them: 41 approved claims.', hint: 'grep "Approved" claims.csv | wc -l' },
+        ],
+      }, 'You moved around folders, looked inside a file, searched it and counted. That is most of what you need.'),
+      mcq('You want to see the first lines of a huge 30 GB file without opening it. Which command?', ['open bigfile.csv', 'head -n 5 bigfile.csv', 'delete bigfile.csv', 'show all bigfile.csv'], 1, '«head» reads only the beginning, so it is instant even for huge files.'),
+      tf('Data engineers spend most of their day typing in the terminal.', false, 'Most of the day is spent in a code editor, in notebooks and in web pages. The terminal is for setup, saving code with Git, and running checks.'),
+    ]),
+    lesson('t3', 'Setting up a project, step by step', 18, [
+      learn('What "setting up a project" means', `
+        A project is just **a folder of code**, plus **the tools that code needs** installed on your computer.
+
+        **Why a "virtual environment"?** Python projects use libraries (ready-made code). Project A might need version 1 of a library and project B version 2. A **virtual environment** is a private box of libraries for one project, so projects never break each other. It lives in a folder usually called «.venv».
+
+        **The usual steps (once per project):**
+        1. Install the basics once: **Python**, **Git** and a code editor (**VS Code**).
+        2. **Download the project** from GitHub (this is called *cloning*).
+        3. **Make the private box** (virtual environment) and switch it on.
+        4. **Install the libraries** the project lists in a file called «requirements.txt».
+        5. **Run the checks** (tests) to make sure everything works.
+        6. **Run the project.**
 
         «««flow
-        Install tools -> Clone repo -> Create venv -> pip install -> Configure .env -> Run tests -> Run pipeline
+        Install basics -> Download project -> Make private box -> Install libraries -> Run checks -> Run project
         »»»
-
-        A typical repo layout:
+      `),
+      learn('What a project folder looks like', `
         «««text
         warranty-pipeline/
-          README.md              <- what it is, how to run it
-          requirements.txt       <- python packages
-          src/ingest.py          <- extract from API -> bronze
-          src/transform.py       <- PySpark bronze -> silver -> gold
-          dags/claims_daily.py   <- Airflow DAG
-          tests/test_transform.py
-          .github/workflows/ci.yml
-          .env.example           <- names of settings, no real secrets
+          README.md            <- instructions: what this is and how to run it
+          requirements.txt     <- the list of libraries it needs
+          src/clean_claims.py  <- the actual code
+          tests/               <- automatic checks
+          .env.example         <- names of settings (never real passwords)
         »»»
-        **At work** the heavy parts (clusters, storage, Kafka, permissions) already exist. You clone the team repo, set up a venv, and log into Databricks/Azure with SSO.
+        **At a company**, the big systems (servers, storage, permissions) are already set up by another team. You download the team's project, do these same steps, and start working.
       `),
-      viz('terminal', 'Set up a PySpark project', 'Real commands, simulated output.', {
+      viz('terminal', 'Set up a project yourself', 'Real commands, pretend output.', {
         missions: [
-          { task: 'Clone the team repo «git@github.com:acme/warranty-pipeline.git».', accept: '^git\\s+clone\\s+\\S+warranty-pipeline(\\.git)?$', out: "Cloning into 'warranty-pipeline'...\nReceiving objects: 100% (214/214), done.", hint: 'git clone git@github.com:acme/warranty-pipeline.git' },
+          { task: 'Download the team\'s project from GitHub.', accept: '^git\\s+clone\\s+\\S+warranty-pipeline(\\.git)?$', out: "Cloning into 'warranty-pipeline'...\nReceiving objects: 100% (214/214), done.", why: 'You now have your own copy of the project in a folder called warranty-pipeline.', hint: 'git clone https://github.com/acme/warranty-pipeline.git' },
           { task: 'Go into the project folder.', accept: '^cd\\s+warranty-pipeline/?$', out: '', hint: 'cd warranty-pipeline' },
-          { task: 'Create a virtual environment called «.venv».', accept: '^python3?\\s+-m\\s+venv\\s+\\.venv$', out: '', why: 'An isolated Python just for this project.', hint: 'python -m venv .venv' },
-          { task: 'Activate it (Mac/Linux).', accept: '^(source|\\.)\\s+\\.venv/bin/activate$', out: '(.venv) $', hint: 'source .venv/bin/activate' },
-          { task: 'Install the dependencies listed in «requirements.txt».', accept: '^pip3?\\s+install\\s+-r\\s+requirements\\.txt$', out: 'Successfully installed pyspark-3.5.1 pytest-8.2.0 requests-2.32.3 delta-spark-3.2.0', hint: 'pip install -r requirements.txt' },
-          { task: 'Run the unit tests.', accept: '^(python\\s+-m\\s+)?pytest(\\s+-q)?$', out: '......                                   [100%]\n6 passed in 14.2s', hint: 'pytest' },
-          { task: 'Run the transform job locally with spark-submit: «src/transform.py».', accept: '^spark-submit\\s+(--master\\s+local\\[\\*\\]\\s+)?src/transform\\.py', out: 'INFO SparkContext: Running Spark version 3.5.1\nINFO DAGScheduler: Job 0 finished: 3 stages\nWrote 97 rows to data/gold/fct_claims', why: 'local[*] = Spark on your laptop using all cores. Same code later runs on a cluster.', hint: 'spark-submit --master local[*] src/transform.py' },
+          { task: 'Make the private box of libraries (the virtual environment), in a folder called «.venv».', accept: '^python3?\\s+-m\\s+venv\\s+\\.venv$', out: '', why: 'Nothing is printed, which means it worked.', hint: 'python -m venv .venv' },
+          { task: 'Switch the private box on.', accept: '^(source|\\.)\\s+\\.venv/bin/activate$', out: '(.venv) $', why: 'See "(.venv)" at the start? That tells you the private box is on.', hint: 'source .venv/bin/activate' },
+          { task: 'Install every library the project lists in «requirements.txt».', accept: '^pip3?\\s+install\\s+-r\\s+requirements\\.txt$', out: 'Successfully installed pandas-2.2.3 pytest-8.3.4 requests-2.32.3', hint: 'pip install -r requirements.txt' },
+          { task: 'Run the automatic checks.', accept: '^(python\\s+-m\\s+)?pytest(\\s+-q)?$', out: '......                                   [100%]\n6 passed in 1.2s', why: '6 passed = everything works.', hint: 'pytest' },
+          { task: 'Run the project\'s code: the file «src/clean_claims.py».', accept: '^python3?\\s+src/clean_claims\\.py$', out: 'Read 97 claims · removed 3 duplicates · wrote 94 rows to output/clean_claims.csv', hint: 'python src/clean_claims.py' },
         ],
-      }, 'That is genuinely the whole local setup. On a team, the README lists these exact steps.'),
-      order('Order the setup steps for a new project.', ['Install Python, Git, Java and VS Code', 'Clone the repository', 'Create and activate a virtual environment', 'pip install -r requirements.txt', 'Add settings to a local .env (not committed)', 'Run the tests', 'Run the pipeline on sample data']),
-      mcq('Why use a virtual environment per project?', ['It makes Python faster', 'Each project gets its own package versions, so projects don\'t break each other', 'It is required by GitHub', 'It encrypts code'], 1),
-      tf('«pip install pyspark» is enough to run real Spark locally, as long as Java is installed.', true, 'PySpark ships Spark itself. local[*] mode runs driver and executors inside one machine. Perfect for learning and tests.'),
+      }, 'That is the whole setup. Every real project\'s README lists steps like these.'),
+      order('Put the setup steps in order.', ['Install Python, Git and VS Code', 'Download the project (git clone)', 'Make and switch on the virtual environment', 'Install the libraries (pip install -r requirements.txt)', 'Run the checks (pytest)', 'Run the project']),
+      mcq('Why does each project get its own virtual environment?', ['It makes Python faster', 'Each project keeps its own library versions, so one project can\'t break another', 'GitHub requires it', 'It hides the code'], 1),
     ]),
-    lesson('t4', 'Git and GitHub hands-on', 15, [
-      learn('Git in one picture', `
-        **Git** tracks versions of your code on your machine. **GitHub** hosts repositories online with a web UI for browsing code, **pull requests** (proposed changes + review), issues and **Actions** (automated CI/CD). Companies use GitHub Enterprise / Azure DevOps / GitLab with SSO.
+    lesson('t4', 'Git and GitHub: saving and sharing your work', 18, [
+      learn('Git in plain words', `
+        **Git** is like "track changes" for code. Every time you reach a good point, you **save a version** (called a **commit**). You can always go back.
+
+        **GitHub** is a website that stores your Git projects online, so your team can see them, review them and work together. Your company may use its own private version.
+
+        Four words to know:
+        - **Repository (repo):** a project folder tracked by Git.
+        - **Commit:** a saved version, with a short note saying what changed.
+        - **Branch:** a separate copy of the work where you try a change without touching the main version. The main version is called «main».
+        - **Pull request (PR):** on GitHub, a request saying *"please review my branch and add it to main"*. Teammates comment, automatic checks run, then it's merged.
 
         «««flow
-        Edit files -> git add (stage) -> git commit (save a version locally) -> git push (upload branch) -> Pull Request in the UI -> Review + CI checks -> Merge to main -> Deploy
+        Make a branch -> Edit files -> Pick the changes (git add) -> Save a version (git commit) -> Upload (git push) -> Open a pull request on GitHub -> Review -> Merge into main
         »»»
-        | Command | Meaning |
-        |---|---|
-        | «git status» | what changed |
-        | «git checkout -b feat/x» | create and switch to a branch |
-        | «git add file» | stage a change |
-        | «git commit -m "msg"» | save a snapshot |
-        | «git pull» | get others' changes |
-        | «git push -u origin feat/x» | upload your branch |
-        | «git log --oneline» | history |
-
-        Branch rule: never work directly on «main». One branch per change, merged via PR.
       `),
-      viz('terminal', 'Ship a change the team way', '', {
+      viz('terminal', 'Make a change the way teams do', '', {
         missions: [
-          { task: 'Check what changed.', accept: '^git\\s+status$', out: 'On branch main\nmodified:   src/transform.py', hint: 'git status' },
-          { task: 'Create a branch «feat/scd2-customer».', accept: '^git\\s+(checkout\\s+-b|switch\\s+-c)\\s+feat/scd2-customer$', out: "Switched to a new branch 'feat/scd2-customer'", hint: 'git checkout -b feat/scd2-customer' },
-          { task: 'Stage «src/transform.py».', accept: '^git\\s+add\\s+(src/transform\\.py|\\.|-A)$', out: '', hint: 'git add src/transform.py' },
-          { task: 'Commit with a message.', accept: '^git\\s+commit\\s+-m\\s+["\'].+["\']$', out: '[feat/scd2-customer 3f2a91c] Track customer region with SCD2\n 1 file changed, 24 insertions(+), 3 deletions(-)', hint: 'git commit -m "Track customer region with SCD2"' },
-          { task: 'Push the branch to GitHub.', accept: '^git\\s+push\\s+(-u\\s+)?origin\\s+feat/scd2-customer$', out: 'remote: Create a pull request for \'feat/scd2-customer\' on GitHub by visiting:\nremote:   https://github.com/acme/warranty-pipeline/pull/new/feat/scd2-customer', why: 'Now you open the Pull Request in the GitHub web UI, reviewers comment, CI runs, then it is merged.', hint: 'git push -u origin feat/scd2-customer' },
+          { task: 'See which files you changed.', accept: '^git\\s+status$', out: 'On branch main\nmodified:   src/clean_claims.py', why: 'Git noticed you edited clean_claims.py.', hint: 'git status' },
+          { task: 'Make a new branch called «feat/remove-duplicates» and switch to it.', accept: '^git\\s+(checkout\\s+-b|switch\\s+-c)\\s+feat/remove-duplicates$', out: "Switched to a new branch 'feat/remove-duplicates'", why: '"feat/" is a common way to say "this branch adds a feature".', hint: 'git checkout -b feat/remove-duplicates' },
+          { task: 'Pick «src/clean_claims.py» to include in your next saved version.', accept: '^git\\s+add\\s+(src/clean_claims\\.py|\\.|-A)$', out: '', hint: 'git add src/clean_claims.py' },
+          { task: 'Save the version, with a short note.', accept: '^git\\s+commit\\s+-m\\s+["\'].+["\']$', out: '[feat/remove-duplicates 3f2a91c] Remove duplicate claims\n 1 file changed, 12 insertions(+)', hint: 'git commit -m "Remove duplicate claims"' },
+          { task: 'Upload your branch to GitHub.', accept: '^git\\s+push\\s+(-u\\s+)?origin\\s+feat/remove-duplicates$', out: 'remote: Create a pull request for \'feat/remove-duplicates\' on GitHub by visiting:\nremote:   https://github.com/acme/warranty-pipeline/pull/new/feat/remove-duplicates', why: 'Next you would open that link and create a pull request for review.', hint: 'git push -u origin feat/remove-duplicates' },
         ],
       }),
-      mcq('Where do code reviews happen?', ['In the terminal', 'In the pull request page of the GitHub (or Azure DevOps) web UI', 'Over email', 'In Spark UI'], 1),
-      match('Match the git action.', [['commit', 'Save a snapshot locally'], ['push', 'Upload your branch to the remote'], ['pull request', 'Ask to merge your branch, with review'], ['merge', 'Bring approved changes into main']]),
+      match('Match each Git word with its meaning.', [['commit', 'A saved version with a note'], ['push', 'Upload your work to GitHub'], ['branch', 'A separate copy to try changes safely'], ['pull request', 'Asking the team to review and merge your work']]),
+      mcq('Where do teammates review your code?', ['In the terminal', 'On the pull request page on GitHub', 'By email', 'They don\'t'], 1),
     ]),
-    lesson('t5', 'Logins, connections and secrets', 18, [
-      learn('Who logs in where, and how systems connect', `
-        | Tool | Install? | Web UI? | How you log in | How code/pipelines access it |
-        |---|---|---|---|---|
-        | Python, PySpark, dbt, Airflow (local) | yes, pip | Airflow has one | none locally | — |
-        | GitHub (Enterprise) | git client | yes | company SSO | SSH key or token from your machine; CI uses a service principal |
-        | Azure/AWS portal | no | yes | company SSO + MFA | service principal / managed identity |
-        | Databricks / Synapse | no (browser) | yes | SSO | personal token for CLI; service principal for jobs |
-        | Snowflake / SQL warehouse | no | yes (worksheets) | SSO | JDBC/ODBC with OAuth or key pair |
-        | Kafka / Event Hubs | CLI optional | yes (management UI) | SSO | SASL/TLS credentials per app |
-        | Airflow / Data Factory | no (managed) | yes | SSO | its own service identity |
-        | Power BI | Desktop app optional | yes | SSO | service principal for refresh |
-        | Salesforce (as a source) | no | yes | SSO | connected app (OAuth) for pipelines |
+    lesson('t6', 'What the tools look like', 15, [
+      learn('Most of the work happens in web pages', `
+        You open most data tools in your web browser and log in with your company account (like opening Outlook). In the next exercise you click through simple pictures of the screens you'll use. Don't worry about the details yet; each tool gets its own lessons later.
 
-        **Key ideas**
-        - **SSO (single sign-on)**: one company identity (Microsoft Entra ID / Okta) opens every tool. No separate passwords.
-        - **Service principal / service account**: a non-human identity for pipelines, with only the permissions it needs.
-        - **Secrets** (passwords, API keys, client secrets) live in **Key Vault / Secrets Manager / Databricks secret scopes**. Code fetches them at runtime. Never in Git.
-        - **Connection** = where (host/URL, port), how (protocol, e.g. JDBC/HTTPS/Kafka), who (credentials), plus **network access** (VPN, private endpoint, firewall rule) and **permission** (a GRANT or RBAC role).
-
-        A JDBC connection string decoded:
-        «««text
-        jdbc:postgresql://claims-db.internal.acme.com:5432/warranty?sslmode=require
-        └ driver ──┘ └──────── host ────────────┘ └port┘ └─ db ─┘ └─ options ─┘
-        user/password -> fetched from Key Vault, passed separately
-        »»»
+        | Screen | What you do there |
+        |---|---|
+        | **Scheduler** (Airflow, Data Factory) | see which data jobs ran overnight and which failed |
+        | **Notebook** (Databricks, Jupyter) | write and try code, see results right below it |
+        | **Spark UI** | see why a big job was slow |
+        | **SQL editor** | write SQL and see the result table |
+        | **Catalog** | find a table: what it means, who owns it, where its data comes from |
+        | **Kafka screen** | see live messages flowing in |
+        | **Cloud portal** (Azure) | see the company's storage and servers |
+        | **GitHub** | review code changes |
       `),
-      match('Match the error to its most likely cause.', [
-        ['Connection timed out', 'Network: firewall, VPN or private endpoint missing'],
-        ['Unknown host / DNS failure', 'Wrong hostname or private DNS not resolvable'],
-        ['401 Unauthorized / login failed', 'Wrong or expired credentials'],
-        ['403 Forbidden / permission denied', 'Authenticated, but missing a role or GRANT'],
-      ], 'Reading these four correctly saves hours. Each points to a different team: network, DNS, identity or data owner.'),
-      scenario('Your new job can\'t read the source database', `You deploy a Databricks job that reads «claims» from a Postgres database. It works from your laptop, but the scheduled job fails.`, [
-        ['The error is «Connection timed out after 30000 ms». Most likely?', [
-          ['The job\'s cluster can\'t reach the database over the network (firewall / private endpoint / VNet peering)', true, 'Timeouts mean packets never got an answer, which is a network path issue. Your laptop is on VPN; the cluster is in a different network.'],
-          ['The password is wrong', false, 'That would be an authentication error, returned quickly.'],
-          ['The table is empty', false, 'An empty table isn\'t an error.'],
-        ]],
-        ['Network fixed. Now: «password authentication failed for user svc_claims». Fix?', [
-          ['Check the secret in Key Vault/secret scope for svc_claims is current and the job reads the right secret name', true, 'Credentials come from the vault at runtime, and a rotated password or wrong scope is typical.'],
-          ['Hard-code your own password in the notebook', false, 'Never. And jobs shouldn\'t run as you.'],
-        ]],
-        ['Now: «permission denied for table claims». Fix?', [
-          ['Ask the data owner to GRANT SELECT on claims to the service principal\'s role', true, 'It authenticated fine; it lacks authorization. Least privilege: SELECT on what it needs.'],
-          ['Give the service principal admin', false, 'Violates least privilege.'],
-        ]],
-      ]),
-      mcq('Where should a pipeline\'s Salesforce client secret live?', ['In the Python file', 'In a key vault / secret scope, read at runtime by the job\'s identity', 'In a shared Excel file', 'In the README'], 1),
-      tf('With SSO, you use the same company login for Databricks, Azure portal and GitHub Enterprise.', true),
-    ]),
-    lesson('t6', 'A tour of the UIs you will use', 15, [
-      viz('uitour', 'Click through each tool\'s screen', 'Simplified mock-ups of the real interfaces, so you know what each one looks like and what you do there.'),
+      viz('uitour', 'Click through each screen', 'Simple pictures of the real tools.'),
       match('Where would you go to…', [
-        ['See which task of last night\'s pipeline failed and read its logs', 'Orchestrator UI (Airflow / Data Factory / Workflows)'],
-        ['Find why one Spark stage took 40 minutes', 'Spark UI'],
-        ['Check who owns a table and what feeds it', 'Catalog lineage page'],
-        ['Review a teammate\'s code change', 'GitHub pull request'],
+        ['See which job failed last night', 'The scheduler (Airflow / Data Factory)'],
+        ['Try some code and see the result right away', 'A notebook'],
+        ['Find out what a table means and who owns it', 'The catalog'],
+        ['Review a teammate\'s code', 'A GitHub pull request'],
       ]),
-      mcq('Where do you write and test a new PySpark transformation interactively before putting it in the repo?', ['Spark UI', 'A notebook (Databricks/Jupyter) or VS Code connected to a cluster', 'The cloud portal', 'Power BI'], 1),
-      mcq('Consumer lag on a topic is growing. Which screen shows it?', ['Kafka / Event Hubs management UI (or monitoring dashboards)', 'GitHub', 'SQL worksheet', 'Notebook'], 0),
+      tf('You need to install and log in to each of these tools separately with different passwords.', false, 'At a company, one company login (called single sign-on) opens all of them in the browser.'),
     ]),
-    lesson('t7', 'The whole platform, end to end', 20, [
-      viz('platform', 'Clickable platform map', 'A realistic enterprise data platform like the ones large manufacturers run. Click each box. Run the flows.'),
-      learn('A day in the life of a DE1', `
-        - **09:00** Check the orchestrator UI: did last night's runs succeed? Any data quality alerts in Teams?
-        - **09:30** Stand-up (Scrum): yesterday, today, blockers.
-        - **10:00** Pick a story: *"Add supplier lead time to the supply chain data product."* Explore source data in a **notebook** (SQL/PySpark).
-        - **12:00** Move the logic into the **repo** in VS Code, write a unit test, run it locally.
-        - **14:00** Push a branch, open a **pull request**, CI runs tests, teammate reviews.
-        - **15:30** Merge, CD deploys the job to the test workspace, verify output tables in the **SQL editor**, check **lineage** in the catalog.
-        - **16:30** Update the table description and data contract, demo to the product owner.
-        - On rotation: investigate a failed run using the **Spark UI** and logs.
+    lesson('t7', 'The whole picture: how everything connects', 20, [
+      learn('Before the map', `
+        The next exercise shows a **map of a real company data setup**. Each box is one tool. Click any box to see, in plain words, what it is, how you use it and how you log in.
 
-        Notice: mostly **UIs and code**, some terminal, many people.
+        Three new words you'll see on the map:
+        - **Kafka**: a system that carries a continuous flow of messages (like engine sensor readings), like a conveyor belt.
+        - **Data lake**: cheap online storage for lots of files.
+        - **Spark**: a tool that processes big data by splitting the work over many computers.
+
+        You'll learn each of these properly later. For now, just see how they connect.
       `),
-      order('Order how a claim moves through the platform map.', ['Created in Salesforce', 'Extracted by the orchestrator\'s nightly run', 'Landed in the lake\'s bronze layer', 'Cleaned and modelled by Spark/dbt into silver and gold', 'Registered in the catalog with lineage', 'Queried by the SQL warehouse behind Power BI']),
-      talk('Explain the platform map to an interviewer in 90 seconds, as if you had built it.', `
-        - "Sources are operational systems: Salesforce for service and warranty, SAP for supply chain, engine telemetry and files."
-        - "Batch sources are pulled by an orchestrator (Data Factory or Airflow) on a schedule. Telemetry flows continuously through Kafka/Event Hubs."
-        - "Everything lands in a lake in layers: bronze raw, silver clean and conformed, gold data products, as Delta tables."
-        - "Spark (Databricks) and dbt do the transformations; the catalog (Unity Catalog/Purview) holds schemas, owners, permissions and automatic lineage."
-        - "Gold tables are served through a SQL warehouse to Power BI, and to ML/GenAI apps as feature tables and vector indexes."
-        - "Around it: code in GitHub with CI/CD, secrets in Key Vault, monitoring and alerts on failures, freshness, quality and cost."
+      viz('platform', 'Clickable map of a data platform', 'Click each box. Press the buttons to see data flowing.'),
+      learn('A normal day for a junior data engineer', `
+        - **9:00** Open the scheduler: did last night's data jobs work? Any alerts?
+        - **9:30** Short team meeting: what I did yesterday, what I'll do today, anything blocking me.
+        - **10:00** New task: *"Add supplier delivery time to the supply-chain tables."* Look at the data in a **notebook**.
+        - **12:00** Write the real code in **VS Code**, add a check (test), run it.
+        - **14:00** Upload it to GitHub and open a **pull request**; a teammate reviews it.
+        - **15:30** After approval, it goes live automatically. Check the new table in the **SQL editor**.
+        - **16:30** Write a short description of the new column in the **catalog**, so others understand it.
+
+        Notice: mostly web pages and code, a little terminal, and lots of talking to people.
       `),
+      order('Put the journey of one claim through the map in order.', ['Created in Salesforce', 'Copied out by the scheduler\'s nightly job', 'Saved raw in the data lake', 'Cleaned and organised by Spark', 'Described in the catalog', 'Shown on a Power BI dashboard']),
     ]),
-    lesson('t8', 'Running real Spark, Kafka and Airflow yourself', 15, [
-      learn('What this arcade simulates, and how to run the real thing', `
-        **In this arcade**
-        - SQL runs on **SQLite** compiled to WebAssembly, a real database engine inside your browser.
-        - Python runs on **Pyodide**: real CPython in the browser.
-        - PySpark runs on a **teaching implementation of the PySpark API** written in Python. Your code is identical to real PySpark; the engine underneath is single-machine. Real Spark needs a Java runtime and runs as many processes, which a browser can't host.
+    lesson('t5', 'Logins, passwords and connections', 18, [
+      learn('Logging in: people vs programs', `
+        **People** log in with one company account for everything. This is called **single sign-on (SSO)**: the same login opens Databricks, Azure, GitHub and so on. You never create accounts yourself; IT gives you access.
 
-        **The real thing on your laptop (free):**
-        | Tool | How |
-        |---|---|
-        | Spark | Install Java 17, «pip install pyspark», run «pyspark» or «spark-submit». Spark UI at «http://localhost:4040» while a job runs |
-        | Delta Lake | «pip install delta-spark» |
-        | Kafka | Docker Desktop + a «docker-compose.yml» with a Kafka image → «docker compose up -d»; CLI tools inside the container |
-        | Airflow | «pip install apache-airflow» then «airflow standalone» → web UI at «http://localhost:8080» |
-        | Postgres | Docker: «docker run -p 5432:5432 -e POSTGRES_PASSWORD=dev postgres» |
-        | Cloud | **Databricks Free Edition** (browser, no install), Azure/AWS free tiers |
+        **Programs** (your data jobs) also need to log in, but they must **not** use your password. They get their own account, often called a **service account** (Microsoft calls it a *service principal*). It only gets the access it needs.
 
-        Docker in one line: it runs prepackaged software (an **image**) as an isolated **container**, so "install Kafka" becomes one command instead of an afternoon.
+        **Passwords and keys for programs** are called **secrets**. They are stored in a safe place called a **key vault**. Code asks the vault for the secret when it runs.
+        > Never write a password inside code or save it in GitHub. Anyone who sees the code sees the password.
       `),
-      viz('terminal', 'Stand up Kafka and stream a message', '', {
-        missions: [
-          { task: 'Start the services defined in «docker-compose.yml» in the background.', accept: '^docker\\s+compose\\s+up\\s+-d$|^docker-compose\\s+up\\s+-d$', out: '[+] Running 2/2\n ✔ Container kafka   Started\n ✔ Container kafka-ui Started', hint: 'docker compose up -d' },
-          { task: 'Create a topic «engine-telemetry» with 3 partitions (inside the container you can run «kafka-topics»).', accept: '^kafka-topics(\\.sh)?\\s+.*--create.*--topic\\s+engine-telemetry.*--partitions\\s+3|^kafka-topics(\\.sh)?\\s+.*--partitions\\s+3.*--topic\\s+engine-telemetry.*--create', out: 'Created topic engine-telemetry.', hint: 'kafka-topics --bootstrap-server localhost:9092 --create --topic engine-telemetry --partitions 3' },
-          { task: 'Read the topic from the beginning with the console consumer.', accept: '^kafka-console-consumer(\\.sh)?\\s+.*--topic\\s+engine-telemetry.*--from-beginning|^kafka-console-consumer(\\.sh)?\\s+.*--from-beginning.*--topic\\s+engine-telemetry', out: '{"engine_id": 7, "temperature_c": 101.4}\n{"engine_id": 12, "temperature_c": 84.0}', hint: 'kafka-console-consumer --bootstrap-server localhost:9092 --topic engine-telemetry --from-beginning' },
-          { task: 'Start Airflow locally with its web UI.', accept: '^airflow\\s+standalone$', out: 'standalone | Airflow is ready\nstandalone | Login with username: admin  password: ********\nWebserver at http://localhost:8080', why: 'Then open the browser: your DAGs appear as graphs you can trigger and watch.', hint: 'airflow standalone' },
-        ],
-      }),
-      mcq('While a local Spark job runs, where is its Spark UI?', ['https://spark.apache.org', 'http://localhost:4040', 'In GitHub', 'There is none locally'], 1),
-      tf('Code written against the PySpark DataFrame API in this arcade runs unchanged on Databricks.', true, 'Same API. Only the engine underneath differs (and «spark.table» names would point at real catalog tables).'),
+      learn('What a program needs to connect to a database', `
+        Four things, like visiting someone's office:
+
+        | Need | Office version | Data version |
+        |---|---|---|
+        | **Where** | the building address | the server address and door number («claims-db.company.com:5432») |
+        | **Can I reach it?** | the road is open | the company network allows it (VPN, firewall rules) |
+        | **Who am I?** | ID badge | the service account's secret from the key vault |
+        | **Am I allowed?** | your name is on the list | someone gave the account permission to read that table |
+
+        When a connection fails, the error message tells you **which of the four** went wrong. Next card.
+      `),
+      match('Match the error to what went wrong.', [
+        ['Connection timed out', 'Can\'t reach it: the network blocks the way'],
+        ['Unknown host', 'Wrong address'],
+        ['Login failed / 401', 'Wrong or expired password or key'],
+        ['Permission denied / 403', 'Logged in fine, but not allowed to read this'],
+      ], 'Each error points to a different fix: network team, the address, the secret, or the data owner.'),
+      scenario('Your new job can\'t read the database', `Your code reads claims from a database. It works on your laptop, but when the job runs on the company servers at night, it fails.`, [
+        ['The error says «Connection timed out». What\'s the most likely cause?', [
+          ['The company servers can\'t reach the database because of network rules (your laptop can, because you\'re on VPN)', true, 'Timed out = the request never got an answer, so it\'s a network path problem.'],
+          ['The password is wrong', false, 'A wrong password gives a "login failed" error, and quickly.'],
+          ['The table is empty', false, 'An empty table is not an error.'],
+        ]],
+        ['The network is fixed. Now: «password authentication failed». What do you check?', [
+          ['That the job\'s secret in the key vault is the current one, and the job reads the right secret name', true, 'Passwords get changed; the vault copy may be old.'],
+          ['Put your own password in the code', false, 'Never. And jobs should not run as you.'],
+        ]],
+        ['Now: «permission denied for table claims». What do you do?', [
+          ['Ask the table\'s owner to give the job\'s service account read access', true, 'It logged in fine; it just isn\'t allowed yet. Ask for the smallest access it needs.'],
+          ['Give the service account full admin rights', false, 'Too much access is a security risk.'],
+        ]],
+      ]),
+      mcq('Where should a data job\'s password live?', ['Inside the code', 'In a key vault, read by the job when it runs', 'In a shared spreadsheet', 'In the README file'], 1),
+      tf('With single sign-on, one company login opens Databricks, Azure and GitHub.', true),
     ]),
   ]);

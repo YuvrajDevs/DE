@@ -5,6 +5,10 @@
 // ------------------------------------------------------------------ utils
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+// Never render "null": drop empty children everywhere.
+for (const P of [Element.prototype, DocumentFragment.prototype]) for (const m of ['append', 'replaceChildren']) {
+  const orig = P[m]; P[m] = function (...k) { return orig.apply(this, k.filter(x => x != null && x !== false)); };
+}
 function h(tag, attrs, ...kids) {
   const el = document.createElement(tag);
   if (attrs) for (const [k, v] of Object.entries(attrs)) {
@@ -289,10 +293,11 @@ function updateHud() {
   const hud = $('#hud'); if (!hud || !S) return;
   const r = rankOf(S.xp);
   const es = Engine.failed ? 'error' : (Engine.py === 'loading' || Engine.sql === 'loading') ? 'loading' : (Engine.sql === 'ready' ? 'ready' : 'idle');
-  const label = { error: 'Engine off', loading: Engine.py === 'loading' ? 'Loading Python…' : 'Loading SQL…', ready: Engine.py === 'ready' ? 'SQL + Python' : 'SQL ready', idle: 'Engine idle' }[es];
+    const streak = S.streak.last && dayNum(todayStr()) - dayNum(S.streak.last) <= 1 ? S.streak.count : 0;
   hud.replaceChildren(
-    h('span', { class: 'chip engine', 'data-s': es, title: Engine.failMsg || 'In-browser code engine' }, h('i', { class: 'dot' }), label),
-    h('span', { class: 'chip streak', title: 'Day streak' }, `▲ ${S.streak.last && dayNum(todayStr()) - dayNum(S.streak.last) <= 1 ? S.streak.count : 0}d`),
+    es === 'loading' ? h('span', { class: 'chip engine', 'data-s': es }, h('i', { class: 'dot' }), 'Getting code ready…') : null,
+    es === 'error' ? h('span', { class: 'chip engine', 'data-s': es, title: Engine.failMsg || '' }, h('i', { class: 'dot' }), 'Code runner off') : null,
+    h('span', { class: 'chip streak', title: 'Days in a row you have practised' }, `${streak}-day streak`),
     h('span', { class: 'chip xp tabnum', title: r.name }, `${S.xp.toLocaleString()} XP`),
   );
 }
@@ -308,7 +313,8 @@ function render() {
   const view = routes[name] ? name : 'home';
   if (current && current.cleanup) current.cleanup();
   current = null;
-  $$('.nav a, .tabbar a').forEach(a => a.setAttribute('aria-current', a.dataset.r === view || (view === 'lesson' && a.dataset.r === 'map') || (view === 'world' && a.dataset.r === 'map') ? 'page' : 'false'));
+  const section = { lesson: 'map', world: 'map', review: 'practice', speed: 'practice', interview: 'practice', arena: 'practice', projects: 'more', posting: 'more', glossary: 'more', settings: 'more' }[view] || view;
+  $$('.nav a, .tabbar a').forEach(a => a.setAttribute('aria-current', a.dataset.r === section ? 'page' : 'false'));
   const main = $('main');
   main.replaceChildren();
   current = routes[view](main, arg) || null;
@@ -329,72 +335,42 @@ function missionDone(item) {
 routes.home = (main) => {
   const r = rankOf(S.xp);
   const nl = nextLesson();
-  const day = planDay();
-  const m = missionFor(Math.min(day, C.plan.length));
+  const day = Math.min(planDay(), C.plan.length);
+  const m = missionFor(day);
   const due = dueItems().length;
   const totalLessons = C.worlds.reduce((a, w) => a + w.lessons.length, 0);
   const doneLessons = Object.keys(S.lessons).filter(k => IDX[k]).length;
-  const items = Object.values(S.items);
-  const acc = items.length ? Math.round(100 * items.reduce((a, i) => a + i.c, 0) / Math.max(1, items.reduce((a, i) => a + i.c + i.w, 0))) : 0;
   main.append(
     h('section', { class: 'hero' },
       h('div', null,
-        h('div', { class: 'eyebrow' }, `Rank ${r.i + 1} of ${RANKS.length}`),
+        h('div', { class: 'eyebrow' }, `Your level: ${r.i + 1} of ${RANKS.length}`),
         h('h1', null, r.name),
         h('div', { class: 'rankline' },
-          h('div', { class: 'meter', role: 'progressbar', 'aria-valuenow': Math.round(r.pct), 'aria-label': 'Progress to next rank' }, h('i', { style: { width: r.pct + '%' } })),
-          h('span', { class: 'muted tabnum', style: { fontSize: '13px' } }, r.next ? `${(r.hi - S.xp).toLocaleString()} XP to ${r.next}` : 'Top rank')),
-        h('div', { class: 'stat-row' },
-          h('div', { class: 'stat' }, h('b', null, S.xp.toLocaleString()), h('span', null, 'total XP')),
-          h('div', { class: 'stat' }, h('b', null, `${doneLessons}/${totalLessons}`), h('span', null, 'lessons cleared')),
-          h('div', { class: 'stat' }, h('b', null, `${acc}%`), h('span', null, 'answer accuracy')),
-          h('div', { class: 'stat' }, h('b', null, S.days[todayStr()] || 0), h('span', null, 'XP today · goal 300')))),
+          h('div', { class: 'meter', role: 'progressbar', 'aria-valuenow': Math.round(r.pct), 'aria-label': 'Progress to next level' }, h('i', { style: { width: r.pct + '%' } })),
+          h('span', { class: 'muted tabnum', style: { fontSize: '13px' } }, `${doneLessons} of ${totalLessons} lessons done`))),
       h('div', { class: 'row', style: { justifyContent: 'flex-end' } },
-        nl ? h('a', { class: 'btn primary', href: `#lesson-${nl.id}` }, 'Continue: ', nl.title) : h('a', { class: 'btn primary', href: '#interview' }, 'Run a mock interview'))),
-    h('div', { class: 'grid cols-2', style: { marginTop: '16px' } },
-      h('section', { class: 'panel' },
-        h('div', { class: 'row' }, h('h2', null, `Day ${Math.min(day, C.plan.length)} mission`), h('span', { class: 'spacer' }), h('a', { href: '#plan', class: 'btn small ghost' }, 'Full 21-day plan')),
-        m ? h('p', { class: 'muted', style: { margin: '0 0 12px' } }, m.focus) : null,
-        m ? h('div', { class: 'mission' }, m.items.map(it => {
-          const done = missionDone(it);
-          const L = it.lesson && IDX[it.lesson];
-          const href = it.lesson ? `#lesson-${it.lesson}` : it.href;
-          return h('a', { class: 'mission-item' + (done ? ' done' : ''), href },
-            h('span', { class: 'tick' }, done ? '✓' : ''),
-            h('span', null, h('span', { class: 't' }, L ? L.lesson.title : it.title), h('small', null, L ? `${L.world.title} · ~${L.lesson.mins || 15} min` : it.note || '')));
-        })) : h('p', null, 'Plan complete. Keep your streak with reviews and mock interviews.')),
-      h('section', { class: 'panel' },
-        h('h2', null, 'Daily drills'),
-        h('div', { class: 'mission' },
-          h('a', { class: 'mission-item', href: '#review' }, h('span', { class: 'tick' }, due ? due : '✓'), h('span', null, h('span', { class: 't' }, 'Spaced review'), h('small', null, due ? `${due} item(s) due. Missed answers come back until they stick.` : 'Nothing due. Come back tomorrow.'))),
-          h('a', { class: 'mission-item', href: '#speed' }, h('span', { class: 'tick' }, '⚡'), h('span', null, h('span', { class: 't' }, 'Lightning round'), h('small', null, `90 seconds of rapid concept questions. Best: ${S.speedBest}`))),
-          h('a', { class: 'mission-item', href: '#interview' }, h('span', { class: 'tick' }, '◎'), h('span', null, h('span', { class: 't' }, 'Mock interview'), h('small', null, 'Timed mixed round: SQL, PySpark, Python, design and behavioural.'))),
-          h('a', { class: 'mission-item', href: '#arena' }, h('span', { class: 'tick' }, '›_'), h('span', null, h('span', { class: 't' }, 'Arena'), h('small', null, 'Free SQL / Python / PySpark console on the practice warehouse.'))),
-          h('a', { class: 'mission-item', href: '#practice' }, h('span', { class: 'tick' }, '◆'), h('span', null, h('span', { class: 't' }, 'Practice hub'), h('small', null, 'Query Gym, Python and PySpark Gyms, Scenario Room, Scale Lab, Bug Hunt, Interview Bank.'))),
-          h('a', { class: 'mission-item', href: '#posting' }, h('span', { class: 'tick' }, '✓'), h('span', null, h('span', { class: 't' }, 'Posting coverage'), h('small', null, 'Every line of the Cummins posting mapped to lessons. Track what is covered.'))),
-          h('a', { class: 'mission-item', href: '#glossary' }, h('span', { class: 'tick' }, 'Aa'), h('span', null, h('span', { class: 't' }, 'Glossary'), h('small', null, '150+ terms, searchable.'))),
-          h('a', { class: 'mission-item', href: '#projects' }, h('span', { class: 'tick' }, '⚙'), h('span', null, h('span', { class: 't' }, 'Resume projects'), h('small', null, 'Two flagship builds, step by step, with resume bullets.')))),
-        Sync.ref ? null : h('p', { class: 'muted', style: { fontSize: '12px', margin: '12px 0 0' } }, 'Progress is saved in this browser.'))),
-    h('div', { class: 'section-head' }, h('h2', null, 'Achievements')),
-    badges(),
+        nl ? h('a', { class: 'btn primary big', href: `#lesson-${nl.id}` }, 'Continue: ', nl.title) : h('a', { class: 'btn primary big', href: '#interview' }, 'Do a mock interview'))),
+    h('section', { class: 'panel', style: { marginTop: '16px' } },
+      h('div', { class: 'row' }, h('h2', { style: { margin: 0 } }, `Today (day ${day} of ${C.plan.length})`), h('span', { class: 'spacer' }), h('a', { href: '#plan', class: 'btn small ghost' }, 'See all days')),
+      m ? h('p', { class: 'muted', style: { margin: '6px 0 12px' } }, m.focus) : null,
+      m ? h('div', { class: 'mission' }, m.items.map(it => {
+        const done = missionDone(it);
+        const L = it.lesson && IDX[it.lesson];
+        return h('a', { class: 'mission-item' + (done ? ' done' : ''), href: it.lesson ? `#lesson-${it.lesson}` : it.href },
+          h('span', { class: 'tick' }, done ? '✓' : ''),
+          h('span', null, h('span', { class: 't' }, L ? L.lesson.title : it.title), h('small', null, L ? `about ${L.lesson.mins || 15} min` : it.note || '')));
+      })) : h('p', null, 'You finished the plan. Keep going with review and mock interviews.')),
+    h('div', { class: 'big-actions' },
+      h('a', { href: '#review' }, h('b', null, 'Review'), h('span', null, due ? `${due} question(s) you missed are due` : 'Nothing to review today')),
+      h('a', { href: '#practice' }, h('b', null, 'Practice'), h('span', null, 'SQL, Python, PySpark, problems, quizzes')),
+      h('a', { href: '#interview' }, h('b', null, 'Mock interview'), h('span', null, 'A timed practice interview'))),
   );
 };
-function badges() {
-  const L = S.lessons, n = Object.keys(L).length;
-  const worldDone = id => { const w = C.worlds.find(x => x.id === id); return w && w.lessons.every(l => L[l.id]); };
-  const list = [
-    ['First pipeline', n >= 1], ['10 lessons', n >= 10], ['25 lessons', n >= 25], ['SQL Foundations cleared', worldDone('sql1')],
-    ['Window wizard', worldDone('sql2')], ['Pythonista', worldDone('python')], ['Spark ignited', worldDone('spark')],
-    ['Modeller', worldDone('model')], ['Quality guardian', worldDone('quality')], ['Streaming', worldDone('stream')],
-    ['7-day streak', S.streak.count >= 7], ['Lightning 15+', S.speedBest >= 15], ['Mock interview ≥ 70%', S.mocks.some(m => m.pct >= 70)],
-  ];
-  return h('div', { class: 'badge-list' }, list.map(([t, on]) => h('span', { class: 'badge' + (on ? ' on' : '') }, (on ? '★ ' : '☆ ') + t)));
-}
 
 // ------------------------------------------------------------------ views: map
 routes.map = (main) => {
-  main.append(h('div', { class: 'section-head', style: { marginTop: 0 } }, h('div', null, h('div', { class: 'eyebrow' }, 'Learning path · basics to DE II-level'), h('h2', null, 'Pipeline map')),
-    h('span', { class: 'muted', style: { fontSize: '13px' } }, 'Every stage is open. The highlighted lesson is your next one.')));
+  main.append(h('div', { class: 'section-head', style: { marginTop: 0 } }, h('div', null, h('div', { class: 'eyebrow' }, 'From zero to job-ready, in order'), h('h2', null, 'Learn')),
+    h('span', { class: 'muted', style: { fontSize: '13px' } }, 'Go top to bottom. The highlighted lesson is your next one.')));
   const nl = nextLesson();
   main.append(h('div', { class: 'worlds' }, C.worlds.map((w, wi) => {
     const done = w.lessons.filter(l => S.lessons[l.id]).length;
@@ -507,7 +483,7 @@ function doneScreen(s, opts) {
 }
 
 // ------------------------------------------------------------------ card renderers
-const KIND = { learn: 'Concept', mcq: 'Choose one', multi: 'Choose all that apply', tf: 'True or false', fill: 'Type the answer', order: 'Put in order', match: 'Match the pairs', sql: 'SQL challenge', py: 'Python challenge', spark: 'PySpark challenge', scenario: 'Incident scenario', talk: 'Say it out loud', viz: 'Interactive simulation', bug: 'Bug hunt' };
+const KIND = { learn: 'Read', mcq: 'Pick one', multi: 'Pick all that are true', tf: 'True or false', fill: 'Type the answer', order: 'Put in order', match: 'Match the pairs', sql: 'Write SQL', py: 'Write Python', spark: 'Write PySpark', scenario: 'Real-world problem', talk: 'Practise answering out loud', viz: 'Try it yourself', bug: 'Find the bug' };
 function renderCard(c, ctx) {
   const card = h('article', { class: 'card' });
   const kindLine = h('div', { class: 'eyebrow kind' }, KIND[c.t] || c.t, ctx.retry ? ' · second try' : '');
@@ -530,16 +506,73 @@ function continueBtn(foot, ctx, label = 'Continue') {
   foot.replaceChildren(b); b.focus({ preventScroll: true });
   return b;
 }
+
+// ------------------------------------------------------------------ jargon: tap a word to see its plain meaning
+let GLOSS_RE = null, GLOSS_MAP = null;
+function glossIndex() {
+  if (GLOSS_RE || !C || !C.glossary) return;
+  GLOSS_MAP = new Map();
+  for (const g of C.glossary) {
+    const paren = g.term.indexOf(' (');
+    const keys = [];
+    if (paren < 0) keys.push(g.term);
+    else {
+      const k = g.term.slice(0, paren);
+      if (/[A-Z]{2}/.test(k) || /\s/.test(k)) keys.push(k);   // acronyms or multi-word names only
+      keys.push(g.term);
+    }
+    for (const k of keys) if (k.length >= 3 && !GLOSS_MAP.has(k.toLowerCase())) GLOSS_MAP.set(k.toLowerCase(), g);
+  }
+  const keys = [...GLOSS_MAP.keys()].sort((a, b) => b.length - a.length).map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  GLOSS_RE = new RegExp('(^|[^A-Za-z0-9_./-])(' + keys.join('|') + ')(?![A-Za-z0-9_/-]|\\.[A-Za-z])', 'i');
+}
+function linkGlossary(root, max = 8) {
+  glossIndex(); if (!GLOSS_RE) return root;
+  const seen = new Set(); let n = 0;
+  const walk = (node) => {
+    for (const ch of [...node.childNodes]) {
+      if (n >= max) return;
+      if (ch.nodeType === 1) { if (!/^(CODE|PRE|A|BUTTON|TH|H1|H2|H3)$/.test(ch.tagName) && !ch.classList.contains('flow')) walk(ch); continue; }
+      if (ch.nodeType !== 3) continue;
+      let text = ch.nodeValue, m, frag = null;
+      while (n < max && (m = GLOSS_RE.exec(text))) {
+        const word = m[2], g = GLOSS_MAP.get(word.toLowerCase()), start = m.index + m[1].length;
+        if (seen.has(g.term)) { frag = frag || document.createDocumentFragment(); frag.append(text.slice(0, start + word.length)); text = text.slice(start + word.length); continue; }
+        seen.add(g.term); n++;
+        frag = frag || document.createDocumentFragment();
+        frag.append(text.slice(0, start), h('button', { type: 'button', class: 'gl', 'data-term': g.term, title: 'Tap for the meaning' }, word));
+        text = text.slice(start + word.length);
+      }
+      if (frag) { frag.append(text); ch.replaceWith(frag); }
+    }
+  };
+  walk(root);
+  return root;
+}
+document.addEventListener('click', (e) => {
+  const b = e.target.closest && e.target.closest('.gl');
+  document.querySelectorAll('.gl-pop').forEach(p => p.remove());
+  if (!b) return;
+  const g = C.glossary.find(x => x.term === b.dataset.term); if (!g) return;
+  const pop = h('div', { class: 'gl-pop', role: 'dialog' }, h('b', null, g.term), h('div', { class: 'md', html: md(g.def) }));
+  document.body.append(pop);
+  const r = b.getBoundingClientRect(), w = Math.min(320, window.innerWidth - 32);
+  pop.style.width = w + 'px';
+  pop.style.left = Math.max(16, Math.min(r.left + window.scrollX, window.scrollX + window.innerWidth - w - 16)) + 'px';
+  pop.style.top = (r.bottom + window.scrollY + 6) + 'px';
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') document.querySelectorAll('.gl-pop').forEach(p => p.remove()); });
+
 const LETTERS = 'ABCDEFGH';
 const renderers = {
   learn(card, c, ctx, fb, foot) {
     if (c.title) card.append(h('h2', null, c.title));
-    card.append(h('div', { class: 'md', html: md(c.md) }));
+    card.append(linkGlossary(h('div', { class: 'md', html: md(c.md) })));
     foot.append(h('button', { class: 'btn primary', onclick: () => { addXp(2); ctx.next(); } }, 'Got it'));
   },
   viz(card, c, ctx, fb, foot) {
     if (c.title) card.append(h('h2', null, c.title));
-    if (c.md) card.append(h('div', { class: 'md', html: md(c.md) }));
+    if (c.md) card.append(linkGlossary(h('div', { class: 'md', html: md(c.md) }), 4));
     const stage = h('div', { class: 'viz' });
     card.append(stage);
     let reached = false;
@@ -884,26 +917,32 @@ routes.interview = (main, arg) => {
 // ------------------------------------------------------------------ views: practice hub
 const TOPIC_NAMES = { orient: 'Orientation', tools: 'Toolbox', sql1: 'SQL basics', sql2: 'Advanced SQL', python: 'Python', model: 'Modelling', pipes: 'Pipelines', quality: 'Quality & governance', spark: 'Spark', bigdata: 'Big data', stream: 'Streaming', cloud: 'Cloud & DevOps', scale: 'Scale', design: 'Design', ai: 'AI-ready data', interview: 'Interview' };
 const GYMS = [
-  ['sql', 'Query Gym', 'Every SQL challenge, easy to hard, on the practice warehouse.', c => c.t === 'sql'],
-  ['python', 'Python Gym', 'Coding problems with hidden tests: parsing, grouping, APIs, generators.', c => c.t === 'py'],
-  ['pyspark', 'PySpark Gym', 'DataFrame, join, window and streaming-style problems.', c => c.t === 'spark'],
-  ['scenarios', 'Scenario Room', 'Multi-step incidents and judgement calls, the way interviews probe experience.', c => c.t === 'scenario'],
-  ['scale', 'Scale Lab', '100M requests, 1B events, 10 TB backfills: sizing and architecture under load.', c => c._topic === 'scale'],
-  ['concepts', 'Concept Drills', 'Rapid quizzes on every topic. Filter by topic below.', c => ['mcq', 'tf', 'multi', 'match', 'order', 'fill'].includes(c.t)],
-  ['bugs', 'Bug Hunt', 'Spot the broken line in SQL, Python, PySpark, Airflow and CI code.', c => c.t === 'bug'],
-  ['interview', 'Interview Bank', 'Say-it-out-loud questions with model answers: design, behavioural, Cummins-specific.', c => c.t === 'talk'],
-  ['weak', 'Weak Spots', 'Only the items you have missed and not yet mastered.', c => S.items[c._id] && S.items[c._id].w > 0 && S.items[c._id].b < 3],
+  ['sql', 'SQL practice', 'Write queries, easy to hard.', c => c.t === 'sql'],
+  ['python', 'Python practice', 'Small coding problems with automatic checks.', c => c.t === 'py'],
+  ['pyspark', 'PySpark practice', 'Spark DataFrame problems.', c => c.t === 'spark'],
+  ['scenarios', 'Real-world problems', 'Something broke at work: what do you do?', c => c.t === 'scenario'],
+  ['scale', 'Big numbers', '"How would you handle 100 million…" questions.', c => c._topic === 'scale'],
+  ['concepts', 'Quick quizzes', 'Short questions on every topic.', c => ['mcq', 'tf', 'multi', 'match', 'order', 'fill'].includes(c.t)],
+  ['bugs', 'Find the bug', 'Spot the broken line of code.', c => c.t === 'bug'],
+  ['interview', 'Interview questions', 'Answer out loud, then compare with a model answer.', c => c.t === 'talk'],
+  ['weak', 'My weak spots', 'Only the questions you got wrong.', c => S.items[c._id] && S.items[c._id].w > 0 && S.items[c._id].b < 3],
 ];
 routes.practice = (main, arg) => {
   const all = Object.values(ITEMS);
   if (!arg) {
-    main.append(h('div', { class: 'section-head', style: { marginTop: 0 } }, h('div', null, h('div', { class: 'eyebrow' }, 'Outside the main path · unlimited practice'), h('h2', null, 'Practice hub')),
-      h('span', { class: 'muted', style: { fontSize: '13px' } }, 'Sessions serve unseen and missed items first. Every miss goes to spaced review.')));
+    const due = dueItems().length;
+    main.append(h('div', { class: 'section-head', style: { marginTop: 0 } }, h('h2', null, 'Practice')),
+      h('div', { class: 'big-actions', style: { marginBottom: '18px' } },
+        h('a', { href: '#review' }, h('b', null, 'Review'), h('span', null, due ? `${due} question(s) you missed are due` : 'Nothing due today')),
+        h('a', { href: '#speed' }, h('b', null, '90-second quiz'), h('span', null, `Answer as many as you can. Best: ${S.speedBest}`)),
+        h('a', { href: '#interview' }, h('b', null, 'Mock interview'), h('span', null, 'A timed practice interview')),
+        h('a', { href: '#arena' }, h('b', null, 'Free coding space'), h('span', null, 'Try any SQL, Python or PySpark'))),
+      h('div', { class: 'section-head' }, h('h2', null, 'Practice sets'), h('span', { class: 'muted', style: { fontSize: '13px' } }, 'New and missed questions come first.')));
     main.append(h('div', { class: 'hub' }, GYMS.map(([k, t, d, f]) => {
       const items = all.filter(f); const seen = items.filter(c => S.items[c._id]).length;
-      return h('a', { href: `#practice-${k}` }, h('span', { class: 'n' }, `${items.length} items · ${seen} attempted`), h('b', null, t), h('span', { class: 'muted', style: { fontSize: '13px' } }, d), h('div', { class: 'bar' }, h('i', { style: { width: (items.length ? 100 * seen / items.length : 0) + '%' } })));
+      return h('a', { href: `#practice-${k}` }, h('span', { class: 'n' }, `${seen} of ${items.length} tried`), h('b', null, t), h('span', { class: 'muted', style: { fontSize: '13px' } }, d), h('div', { class: 'bar' }, h('i', { style: { width: (items.length ? 100 * seen / items.length : 0) + '%' } })));
     })));
-    main.append(h('div', { class: 'section-head' }, h('h2', null, 'Concept drills by topic')),
+    main.append(h('div', { class: 'section-head' }, h('h2', null, 'Quick quizzes by topic')),
       h('div', { class: 'lessons' }, Object.entries(TOPIC_NAMES).map(([k, t]) => {
         const n = all.filter(c => c._topic === k && ['mcq', 'tf', 'multi', 'match', 'order', 'fill'].includes(c.t)).length;
         return n ? h('a', { class: 'lesson-pill', href: `#practice-concepts-${k}` }, t, h('span', { class: 'ln' }, String(n))) : null;
@@ -1007,6 +1046,15 @@ routes.plan = (main) => {
   });
   main.append(list);
 };
+routes.more = (main) => {
+  main.append(h('div', { class: 'section-head', style: { marginTop: 0 } }, h('h2', null, 'More')),
+    h('div', { class: 'big-actions' },
+      h('a', { href: '#projects' }, h('b', null, 'Resume projects'), h('span', null, 'Two projects to build, step by step')),
+      h('a', { href: '#posting' }, h('b', null, 'Job posting checklist'), h('span', null, 'Every line of the Cummins posting and where you learn it')),
+      h('a', { href: '#glossary' }, h('b', null, 'Word list'), h('span', null, 'Plain-English meaning of every term')),
+      h('a', { href: '#arena' }, h('b', null, 'Free coding space'), h('span', null, 'Try any SQL, Python or PySpark')),
+      h('a', { href: '#settings' }, h('b', null, 'Settings'), h('span', null, 'Back up or reset your progress'))));
+};
 routes.glossary = (main) => {
   const q = h('input', { class: 'input', id: 'gloss-q', placeholder: 'Search 150+ terms: idempotency, SCD2, watermark, skew…', autocomplete: 'off' });
   const list = h('div', { class: 'gloss' });
@@ -1064,7 +1112,7 @@ routes.projects = (main) => {
 
 // ------------------------------------------------------------------ boot
 function shell() {
-  const navItems = [['home', 'Home'], ['map', 'Map'], ['practice', 'Practice'], ['review', 'Review'], ['interview', 'Interview'], ['arena', 'Arena'], ['plan', 'Plan'], ['projects', 'Projects'], ['posting', 'Posting']];
+  const navItems = [['home', 'Home'], ['map', 'Learn'], ['practice', 'Practice'], ['plan', 'Plan'], ['more', 'More']];
   const icons = {
     home: '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
     map: '<path d="M4 6h5l3 4h8M4 18h5l3-4"/><circle cx="4" cy="6" r="2"/><circle cx="4" cy="18" r="2"/><circle cx="20" cy="10" r="2"/>',
@@ -1072,16 +1120,17 @@ function shell() {
     arena: '<path d="M4 6l6 6-6 6M12 18h8"/>',
     interview: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/>',
     practice: '<path d="M6 4v16M18 4v16M3 8v8M21 8v8M6 12h12"/>',
+    plan: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>',
+    more: '<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>',
   };
   const svg = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[k]}</svg>`;
   document.body.prepend(
     h('header', { class: 'topbar' }, h('div', { class: 'topbar-in' },
       h('a', { class: 'brand', href: '#home' }, h('span', { class: 'brand-mark' }, 'DE'), 'DE Arcade'),
       h('nav', { class: 'nav', 'aria-label': 'Main' }, navItems.map(([r, t]) => h('a', { href: '#' + r, 'data-r': r }, t))),
-      h('div', { class: 'hud', id: 'hud' }),
-      h('a', { class: 'theme-btn', href: '#settings', title: 'Settings', 'aria-label': 'Settings', style: { display: 'grid', placeItems: 'center', textDecoration: 'none', color: 'var(--ink-2)' } }, '⚙'))),
+      h('div', { class: 'hud', id: 'hud' }))),
   );
-  document.body.append(h('nav', { class: 'tabbar', 'aria-label': 'Main' }, ['home', 'map', 'practice', 'review', 'interview'].map(r => h('a', { href: '#' + r, 'data-r': r, html: svg(r) + `<span>${r[0].toUpperCase() + r.slice(1)}</span>` }))));
+  document.body.append(h('nav', { class: 'tabbar', 'aria-label': 'Main' }, navItems.map(([r, t]) => h('a', { href: '#' + r, 'data-r': r, html: svg(r) + `<span>${t}</span>` }))));
 }
 
 async function boot() {
