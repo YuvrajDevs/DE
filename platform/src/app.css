@@ -488,3 +488,34 @@ table.vt tr.dup td { background: var(--bad-soft); }
 .cov-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
 .cov-row .lessons { margin-top: 6px; }
 .cov-row .pct { font-family: var(--f-mono); font-weight: 700; color: var(--accent); }
+
+/* ---------- part 3: project walkthrough visuals ---------- */
+.stepper-body { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; background: var(--panel); min-height: 120px; }
+.tl { display: grid; gap: 8px; }
+.tl-item { border: 1px solid var(--line); border-left: 4px solid var(--line); border-radius: 10px; background: var(--panel); }
+.tl-item.k-bug { border-left-color: var(--bad); } .tl-item.k-env { border-left-color: var(--accent); }
+.tl-item.k-design { border-left-color: var(--xp-fill); } .tl-item.k-info { border-left-color: var(--ok); }
+.tl-item summary { cursor: pointer; padding: 10px 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.tl-id { font-family: var(--f-mono); font-weight: 700; color: var(--accent); min-width: 34px; }
+.tl-t { font-weight: 600; flex: 1; min-width: 0; }
+.tl-k { font-family: var(--f-mono); font-size: 11px; color: var(--ink-2); }
+.tl-body { padding: 0 14px 12px; }
+.ec-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); }
+.ec-svg { width: 100%; min-width: 560px; height: auto; display: block; }
+.ec-grid { stroke: var(--line); stroke-width: 1; }
+.ec-ax { fill: var(--ink-2); font-family: var(--f-mono); font-size: 10px; }
+.ec-raw { fill: none; stroke: var(--ink-2); stroke-width: 1; opacity: .45; }
+.ec-ewma { fill: none; stroke: var(--accent); stroke-width: 2.6; }
+.ec-warn { stroke: var(--xp-fill); stroke-width: 2; stroke-dasharray: 6 4; }
+.ec-crit { stroke: var(--bad); stroke-width: 2; stroke-dasharray: 6 4; }
+.ec-fail { stroke: var(--bad); stroke-width: 2.5; }
+.ec-mw { stroke: var(--xp); stroke-width: 1.5; fill: var(--xp); } .ec-mc { stroke: var(--bad); stroke-width: 1.5; fill: var(--bad); }
+.ec-lab { font-family: var(--f-mono); font-size: 10.5px; stroke: none; }
+.lg.ec1::before { background: var(--ink-2); opacity: .5; } .lg.ec2::before { background: var(--accent); } .lg.ec3::before { background: var(--xp-fill); } .lg.ec4::before { background: var(--bad); }
+.ec-stats { overflow-x: auto; }
+.pm-count { fill: var(--accent); font-family: var(--f-mono); font-size: 10px; font-weight: 700; }
+.pm-node.crash rect { fill: var(--bad-soft); stroke: var(--bad); stroke-dasharray: 4 3; }
+.tt-dot { stroke: var(--panel); stroke-width: 2; }
+.tt-dot.ok { fill: var(--accent); } .tt-dot.dup { fill: #8b5cf6; } .tt-dot.late { fill: var(--xp-fill); } .tt-dot.bad { fill: var(--bad); }
+.lg.tt-ok::before { background: var(--accent); } .lg.tt-dup::before { background: #8b5cf6; } .lg.tt-late::before { background: var(--xp-fill); } .lg.tt-bad::before { background: var(--bad); }
+.tt-ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: 14px; }

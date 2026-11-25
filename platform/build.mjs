@@ -35,7 +35,7 @@ fs.writeFileSync(path.join(DIST, 'content.json'), JSON.stringify({ worlds, plan,
 
 // ---- syntax-check every inlined script
 import vm from 'node:vm';
-for (const f of ['viz.js', 'viz2.js', 'app.js', 'engine-worker.js']) new vm.Script(fs.readFileSync(path.join(SRC, f), 'utf8'), { filename: f });
+for (const f of ['viz.js', 'viz2.js', 'viz3.js', 'app.js', 'engine-worker.js']) new vm.Script(fs.readFileSync(path.join(SRC, f), 'utf8'), { filename: f });
 
 // ---- page
 let html = fs.readFileSync(path.join(SRC, 'shell.html'), 'utf8');
@@ -43,6 +43,7 @@ const inline = (marker, file) => { const s = fs.readFileSync(path.join(SRC, file
 inline('/*CSS*/', 'app.css');
 inline('/*VIZ*/', 'viz.js');
 inline('/*VIZ2*/', 'viz2.js');
+inline('/*VIZ3*/', 'viz3.js');
 inline('/*APP*/', 'app.js');
 const fullDoc = '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body>' + html + '</body></html>';
 fs.writeFileSync(path.join(DIST, 'index.html'), fullDoc);   // standalone site (Vercel, any static host, local dev)
