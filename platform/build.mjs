@@ -17,6 +17,15 @@ const projects = require(path.join(SRC, 'content', 'projects.cjs'));
 const practice = require(path.join(SRC, 'content', 'practice.cjs'));
 const posting = require(path.join(SRC, 'content', 'posting.cjs'));
 const sql50 = require(path.join(SRC, 'content', 'sql50.cjs'));
+const modules = require(path.join(SRC, 'content', 'modules.cjs'));
+{ // every module lesson must exist, and every lesson should belong to a module
+  const ids = new Set(worlds.flatMap(w => w.lessons.map(l => l.id)));
+  const used = new Set(modules.flatMap(m => m.lessons));
+  const missing = [...used].filter(x => !ids.has(x));
+  if (missing.length) throw new Error('modules.cjs references unknown lessons: ' + missing.join(', '));
+  const orphans = [...ids].filter(x => !used.has(x));
+  if (orphans.length) console.warn('lessons not in any module:', orphans.join(', '));
+}
 const ids = new Set(); let cards = 0; const types = {};
 for (const w of worlds) for (const l of w.lessons) {
   if (ids.has(l.id)) throw new Error('duplicate lesson id ' + l.id);
@@ -32,7 +41,7 @@ for (const w of worlds) for (const l of w.lessons) {
 for (const set of practice) for (const c of set.cards) { cards++; types[c.t] = (types[c.t] || 0) + 1; }
 for (const sec of posting) for (const it of sec.items) for (const id of it.lessons) if (!ids.has(id)) throw new Error('posting: unknown lesson ' + id);
 for (const d of plan) for (const it of d.items) if (it.lesson && !ids.has(it.lesson)) throw new Error(`plan day ${d.day}: unknown lesson ${it.lesson}`);
-fs.writeFileSync(path.join(DIST, 'content.json'), JSON.stringify({ worlds, plan, glossary, projects, practice, posting, sql50 }));
+fs.writeFileSync(path.join(DIST, 'content.json'), JSON.stringify({ worlds, plan, glossary, projects, practice, posting, sql50, modules }));
 
 // ---- syntax-check every inlined script
 import vm from 'node:vm';

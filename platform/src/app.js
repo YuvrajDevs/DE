@@ -320,7 +320,7 @@ function render() {
   const view = routes[name] ? name : 'home';
   if (current && current.cleanup) current.cleanup();
   current = null;
-  const section = { lesson: 'map', world: 'map', review: 'practice', sql50: 'practice', speed: 'practice', interview: 'practice', arena: 'practice', projects: 'more', posting: 'more', glossary: 'more', settings: 'more' }[view] || view;
+  const section = { map: 'modules', module: 'modules', mpractice: 'modules', lesson: 'modules', world: 'modules', review: 'practice', sql50: 'practice', speed: 'practice', interview: 'practice', arena: 'practice', projects: 'more', posting: 'more', glossary: 'more', settings: 'more' }[view] || view;
   $$('.nav a, .tabbar a').forEach(a => a.setAttribute('aria-current', a.dataset.r === section ? 'page' : 'false'));
   const main = $('main');
   main.replaceChildren();
@@ -376,6 +376,7 @@ routes.home = (main) => {
 
 // ------------------------------------------------------------------ views: map
 routes.map = (main) => {
+  LAST_MODULE = null;
   main.append(h('div', { class: 'section-head', style: { marginTop: 0 } }, h('div', null, h('div', { class: 'eyebrow' }, 'From zero to job-ready, in order'), h('h2', null, 'Learn')),
     h('span', { class: 'muted', style: { fontSize: '13px' } }, 'Go top to bottom. The highlighted lesson is your next one.')));
   const nl = nextLesson();
@@ -926,11 +927,92 @@ routes.sql50 = (main, arg) => {
   const cur = $('.s50-item.cur', list); if (cur && window.innerWidth > 900) cur.scrollIntoView({ block: 'nearest' });
 };
 
+
+// ------------------------------------------------------------------ views: modules (learn by skill, any order)
+let LAST_MODULE = null;
+const modLessons = m => m.lessons.map(id => IDX[id]).filter(Boolean);
+const modCards = m => modLessons(m).flatMap(L => L.lesson.cards).filter(c => GRADABLE.has(c.t) && c._id);
+function modProgress(m) {
+  const ls = modLessons(m), done = ls.filter(L => S.lessons[L.lesson.id]).length;
+  S.checks = S.checks || {};
+  const total = m.de1.length, ticked = m.de1.filter((_, i) => S.checks[`${m.id}:de1:${i}`]).length;
+  return { done, total: ls.length, de1: ticked, de1Total: total };
+}
+const DEPTH = { 'hands-on': ['Hands-on', 'You must be able to do this yourself'], conceptual: ['Conceptual', 'Explain it clearly and know when to use it'] };
+routes.modules = (main) => {
+  LAST_MODULE = null;
+  main.append(h('div', { class: 'section-head', style: { marginTop: 0 } },
+    h('div', null, h('div', { class: 'eyebrow' }, 'Learn by skill, in any order'), h('h2', null, 'Modules')),
+    h('a', { class: 'btn small ghost', href: '#map' }, 'Full course in order')));
+  main.append(h('p', { class: 'muted', style: { marginTop: '-4px', maxWidth: '760px' } },
+    'Each module covers one skill, tool or concept: lessons, practice, a checklist of what the DE 1 posting expects, and a "Beyond DE 1" checklist. Open any module, any time.'));
+  const groups = [...new Set(C.modules.map(m => m.group))];
+  for (const g of groups) {
+    main.append(h('h3', { class: 'mod-group' }, g));
+    main.append(h('div', { class: 'mods' }, C.modules.filter(m => m.group === g).map(m => {
+      const p = modProgress(m);
+      return h('a', { class: 'mod-card', href: `#module-${m.id}` },
+        h('div', { class: 'mod-top' }, h('span', { class: 'badge ' + m.depth }, DEPTH[m.depth][0]), h('span', { class: 'muted small' }, `${p.done}/${p.total} lessons`)),
+        h('b', null, m.title),
+        h('span', { class: 'muted small' }, m.why),
+        h('div', { class: 'meter accent' }, h('i', { style: { width: (p.total ? 100 * p.done / p.total : 0) + '%' } })),
+        h('span', { class: 'muted small' }, `DE 1 checklist: ${p.de1}/${p.de1Total}`));
+    })));
+  }
+};
+routes.module = (main, id) => {
+  const m = (C.modules || []).find(x => x.id === id);
+  if (!m) { main.append(h('p', null, 'Module not found. ', h('a', { href: '#modules' }, 'All modules'))); return; }
+  LAST_MODULE = m.id;
+  S.checks = S.checks || {};
+  const p = modProgress(m);
+  const checklist = (key, items) => h('ul', { class: 'checks' }, items.map((t, i) => {
+    const k = `${m.id}:${key}:${i}`;
+    const box = h('input', { type: 'checkbox', id: 'ck-' + k.replace(/\W/g, '_'), checked: S.checks[k] ? true : null, onchange: e => { S.checks[k] = e.target.checked; save(); } });
+    return h('li', null, box, h('label', { for: box.id }, t));
+  }));
+  const cards = modCards(m);
+  const tried = cards.filter(c => S.items[c._id]).length;
+  main.append(
+    h('a', { class: 'btn small ghost', href: '#modules', style: { marginBottom: '10px' } }, '← All modules'),
+    h('div', { class: 'section-head', style: { marginTop: 0 } },
+      h('div', null, h('div', { class: 'eyebrow' }, m.group), h('h2', null, m.title)),
+      h('span', { class: 'badge big ' + m.depth, title: DEPTH[m.depth][1] }, DEPTH[m.depth][0])),
+    h('p', { class: 'muted', style: { marginTop: '-4px', maxWidth: '760px' } }, m.why, ' ', h('i', null, DEPTH[m.depth][1] + '.')),
+    h('div', { class: 'grid cols-2 mod-grid' },
+      h('section', { class: 'panel' },
+        h('h3', null, 'Lessons ', h('span', { class: 'muted small' }, `${p.done}/${p.total} done · any order`)),
+        h('div', { class: 'lessons' }, modLessons(m).map((L, n) => {
+          const st = lessonStars(L.lesson.id);
+          return h('a', { class: 'lesson-pill' + (st ? ' done' : ''), href: `#lesson-${L.lesson.id}` },
+            h('span', { class: 'ln' }, String(n + 1)), L.lesson.title, L.world.id === 'beyond' ? h('span', { class: 'badge beyond' }, 'Beyond DE 1') : null,
+            st ? h('span', { class: 'stars' }, '★'.repeat(st) + '☆'.repeat(3 - st)) : null);
+        })),
+        h('h3', { style: { marginTop: '18px' } }, 'Practice'),
+        h('div', { class: 'row', style: { flexWrap: 'wrap', gap: '8px' } },
+          cards.length ? h('a', { class: 'btn primary', href: `#mpractice-${m.id}` }, `Practise this module (${tried}/${cards.length} tried)`) : null,
+          ...(m.practice || []).map(x => h('a', { class: 'btn', href: x.href }, x.label)))),
+      h('section', { class: 'panel' },
+        h('h3', null, 'DE 1 bar ', h('span', { class: 'muted small' }, 'tick what you can do without notes')),
+        checklist('de1', m.de1),
+        h('h3', { style: { marginTop: '18px' } }, 'Beyond DE 1 ', h('span', { class: 'muted small' }, 'what makes you stronger than the posting')),
+        checklist('beyond', m.beyond))));
+};
+routes.mpractice = (main, id) => {
+  const m = (C.modules || []).find(x => x.id === id);
+  if (!m) { location.hash = '#modules'; return; }
+  LAST_MODULE = m.id;
+  const score = c => { const it = S.items[c._id]; return !it ? 0 : it.w > 0 && it.b < 3 ? 1 : 2 + it.b; };
+  const cards = shuffle(modCards(m)).sort((a, b) => score(a) - score(b)).slice(0, 12);
+  if (!cards.length) { main.append(h('div', { class: 'card done-screen' }, h('h2', null, 'No practice questions in this module yet'), h('a', { class: 'btn primary', href: `#module-${m.id}` }, 'Back to module'))); return; }
+  return Player(main, cards, { title: `${m.title} · practice (new and missed first)`, mode: 'review', exitHref: `#module-${m.id}` });
+};
+
 // ------------------------------------------------------------------ views: lesson / world
 routes.lesson = (main, id) => {
   const L = IDX[id];
   if (!L) { main.append(h('p', null, 'Lesson not found. ', h('a', { href: '#map' }, 'Back to map'))); return; }
-  return Player(main, L.lesson.cards, { title: `${L.world.title} · ${L.lesson.title}`, lessonId: id, mode: 'lesson', exitHref: `#map` });
+  return Player(main, L.lesson.cards, { title: `${L.world.title} · ${L.lesson.title}`, lessonId: id, mode: 'lesson', exitHref: LAST_MODULE ? `#module-${LAST_MODULE}` : `#map` });
 };
 
 // ------------------------------------------------------------------ views: review / speed / interview
@@ -997,7 +1079,7 @@ routes.interview = (main, arg) => {
 
 
 // ------------------------------------------------------------------ views: practice hub
-const TOPIC_NAMES = { orient: 'Orientation', tools: 'Toolbox', sql1: 'SQL basics', sql2: 'Advanced SQL', python: 'Python', model: 'Modelling', pipes: 'Pipelines', quality: 'Quality & governance', spark: 'Spark', bigdata: 'Big data', stream: 'Streaming', cloud: 'Cloud & DevOps', scale: 'Scale', design: 'Design', ai: 'AI-ready data', interview: 'Interview' };
+const TOPIC_NAMES = { beyond: 'Beyond DE 1', orient: 'Orientation', tools: 'Toolbox', sql1: 'SQL basics', sql2: 'Advanced SQL', python: 'Python', model: 'Modelling', pipes: 'Pipelines', quality: 'Quality & governance', spark: 'Spark', bigdata: 'Big data', stream: 'Streaming', cloud: 'Cloud & DevOps', scale: 'Scale', design: 'Design', ai: 'AI-ready data', interview: 'Interview' };
 const GYMS = [
   ['sql', 'SQL practice', 'Write queries, easy to hard.', c => c.t === 'sql'],
   ['python', 'Python practice', 'Small coding problems with automatic checks.', c => c.t === 'py'],
@@ -1195,10 +1277,11 @@ routes.projects = (main) => {
 
 // ------------------------------------------------------------------ boot
 function shell() {
-  const navItems = [['home', 'Home'], ['map', 'Learn'], ['practice', 'Practice'], ['plan', 'Plan'], ['more', 'More']];
+  const navItems = [['home', 'Home'], ['modules', 'Learn'], ['practice', 'Practice'], ['plan', 'Plan'], ['more', 'More']];
   const icons = {
     home: '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
     map: '<path d="M4 6h5l3 4h8M4 18h5l3-4"/><circle cx="4" cy="6" r="2"/><circle cx="4" cy="18" r="2"/><circle cx="20" cy="10" r="2"/>',
+    modules: '<rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/>',
     review: '<path d="M4 12a8 8 0 1 0 3-6.2M4 4v4h4"/>',
     arena: '<path d="M4 6l6 6-6 6M12 18h8"/>',
     interview: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/>',
