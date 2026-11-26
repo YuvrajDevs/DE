@@ -101,6 +101,13 @@ function indexContent() {
       if (GRADABLE.has(c.t)) ITEMS[c._id] = c;
     });
   }));
+  ((C.sql50 && C.sql50.concepts) || []).forEach(k => k.questions.forEach((c, qi) => {
+    c._id = `sql50:${k.id}:${qi}`;
+    c._lesson = 'sql50';
+    c._topic = 'sql';
+    c._concept = k;
+    ITEMS[c._id] = c;
+  }));
   (C.practice || []).forEach(set => set.cards.forEach((c, ci) => {
     c._id = `${set.id}:${ci}`;
     c._lesson = set.id;
@@ -313,7 +320,7 @@ function render() {
   const view = routes[name] ? name : 'home';
   if (current && current.cleanup) current.cleanup();
   current = null;
-  const section = { lesson: 'map', world: 'map', review: 'practice', speed: 'practice', interview: 'practice', arena: 'practice', projects: 'more', posting: 'more', glossary: 'more', settings: 'more' }[view] || view;
+  const section = { lesson: 'map', world: 'map', review: 'practice', sql50: 'practice', speed: 'practice', interview: 'practice', arena: 'practice', projects: 'more', posting: 'more', glossary: 'more', settings: 'more' }[view] || view;
   $$('.nav a, .tabbar a').forEach(a => a.setAttribute('aria-current', a.dataset.r === section ? 'page' : 'false'));
   const main = $('main');
   main.replaceChildren();
@@ -833,6 +840,7 @@ async function codeCard(card, c, ctx, fb, foot, kind) {
       else { const cmp = compareResults({ cols: r.cols, rows: r.rows }, r.expected && r.expected.cols ? { cols: r.expected.cols, rows: r.expected.rows } : null, c.ordered); pass = cmp.pass; msg = cmp.msg; }
     }
     if (pass) {
+      if (ctx.solved) ctx.solved(c);
       if (!solved) { solved = true; if (!gaveUp) ctx.graded(c, attempts === 1, submitBtn, 30); }
       if (attempts > 1 && !gaveUp) { /* counted as a later success: recordItem saw the first failure */ }
       feedback(fb, true, attempts === 1 ? 'Passed on the first try' : `Passed (attempt ${attempts})`, c.why);
@@ -843,6 +851,80 @@ async function codeCard(card, c, ctx, fb, foot, kind) {
     }
   }
 }
+
+
+// ------------------------------------------------------------------ view: SQL in 50 (free navigation)
+function sql50Steps() {
+  const steps = [];
+  ((C.sql50 && C.sql50.concepts) || []).forEach((k, ki) => {
+    steps.push({ kind: 'learn', k, ki, id: `sql50:${k.id}:learn` });
+    k.questions.forEach((c, qi) => steps.push({ kind: 'q', k, ki, qi, c, id: c._id }));
+  });
+  return steps;
+}
+routes.sql50 = (main, arg) => {
+  S.sql50 = S.sql50 || {};
+  const steps = sql50Steps();
+  if (!steps.length) { main.append(h('p', null, 'SQL in 50 is not available.')); return; }
+  let i = Math.min(Math.max(parseInt(arg, 10) || 0, 0), steps.length - 1);
+  const qSteps = steps.filter(x => x.kind === 'q');
+  const mark = st => st.kind === 'learn' ? (S.sql50[st.id] ? 'seen' : '') : (S.sql50[st.id] || '');
+  const icon = m => m === 'ok' ? '✓' : m === 'tried' ? '•' : m === 'seen' ? '✓' : '';
+  const go = n => { location.hash = `#sql50-${n}`; };
+
+  const solvedCount = () => qSteps.filter(x => S.sql50[x.id] === 'ok').length;
+  const counter = h('span', { class: 'muted' });
+  const list = h('ol', { class: 's50-list' });
+  function drawList() {
+    counter.textContent = `${solvedCount()} of ${qSteps.length} solved`;
+    list.replaceChildren(...steps.map((st, n) => {
+      const m = mark(st);
+      const label = st.kind === 'learn' ? `${st.ki + 1}. ${st.k.title}` : `Query ${st.qi + 1}`;
+      return h('li', { class: 's50-item ' + st.kind + (n === i ? ' cur' : '') },
+        h('a', { href: `#sql50-${n}`, 'aria-current': n === i ? 'step' : null },
+          h('span', { class: 's50-mark ' + m, 'aria-hidden': 'true' }, icon(m)), label,
+          m === 'ok' ? h('span', { class: 'sr-only' }, ' (solved)') : m === 'tried' ? h('span', { class: 'sr-only' }, ' (tried)') : null));
+    }));
+  }
+  const st = steps[i];
+  const pane = h('div', { class: 's50-pane' });
+  const nav = h('div', { class: 's50-nav' },
+    h('button', { class: 'btn', disabled: i === 0, onclick: () => go(i - 1) }, '← Previous'),
+    h('span', { class: 'muted' }, `Step ${i + 1} of ${steps.length}`),
+    h('button', { class: 'btn' + (st.kind === 'learn' ? ' primary' : ''), disabled: i === steps.length - 1, onclick: () => go(i + 1) }, st.kind === 'learn' ? 'Try it →' : 'Next →'));
+  if (st.kind === 'learn') {
+    if (!S.sql50[st.id]) { S.sql50[st.id] = 'seen'; save(); }
+    pane.append(h('article', { class: 'card' },
+      h('div', { class: 'eyebrow kind' }, `Concept ${st.ki + 1} of ${C.sql50.concepts.length}`),
+      h('h2', null, st.k.title),
+      linkGlossary(h('div', { class: 'md', html: md(st.k.md) })),
+      h('p', { class: 'muted', style: { marginTop: '14px' } }, `Next: ${st.k.questions.length} practice queries. The second one is there in case the first didn't work out.`)));
+  } else {
+    const ctx = {
+      mode: 'lesson', retry: false,
+      graded: (card, correct) => {
+        recordItem(card._id, correct);
+        if (correct) { S.sql50[card._id] = 'ok'; addXp(10); }
+        else if (S.sql50[card._id] !== 'ok') S.sql50[card._id] = 'tried';
+        save(); drawList();
+      },
+      solved: (card) => { S.sql50[card._id] = 'ok'; save(); drawList(); },
+      next: () => go(Math.min(i + 1, steps.length - 1)),
+    };
+    pane.append(h('div', { class: 'eyebrow', style: { marginBottom: '6px' } }, `${st.ki + 1}. ${st.k.title} · query ${st.qi + 1} of ${st.k.questions.length}`),
+      renderCard(st.c, ctx),
+      h('p', { class: 'muted', style: { fontSize: '13px' } }, 'Stuck? ', h('a', { href: `#sql50-${steps.findIndex(x => x.kind === 'learn' && x.k === st.k)}` }, 'Read the explainer again'), '.'));
+  }
+  drawList();
+  const listPanel = h('details', { class: 's50-side panel', open: window.innerWidth > 900 ? true : null },
+    h('summary', null, h('b', null, 'All steps'), ' ', counter), list);
+  main.append(
+    h('div', { class: 'section-head', style: { marginTop: 0 } }, h('div', null, h('div', { class: 'eyebrow' }, 'Practice'), h('h2', null, 'SQL in 50')),
+      h('a', { class: 'btn small ghost', href: '#practice' }, 'Back to practice')),
+    h('p', { class: 'muted', style: { marginTop: '-6px' } }, C.sql50.blurb),
+    h('div', { class: 's50' }, listPanel, h('div', null, pane, nav)));
+  const cur = $('.s50-item.cur', list); if (cur && window.innerWidth > 900) cur.scrollIntoView({ block: 'nearest' });
+};
 
 // ------------------------------------------------------------------ views: lesson / world
 routes.lesson = (main, id) => {
@@ -933,6 +1015,7 @@ routes.practice = (main, arg) => {
     const due = dueItems().length;
     main.append(h('div', { class: 'section-head', style: { marginTop: 0 } }, h('h2', null, 'Practice')),
       h('div', { class: 'big-actions', style: { marginBottom: '18px' } },
+        h('a', { href: '#sql50', class: 'feature' }, h('b', null, 'SQL in 50'), h('span', null, `Zero to interview level: 25 concepts, 50 queries. ${Object.values(S.sql50 || {}).filter(v => v === 'ok').length} solved`)),
         h('a', { href: '#review' }, h('b', null, 'Review'), h('span', null, due ? `${due} question(s) you missed are due` : 'Nothing due today')),
         h('a', { href: '#speed' }, h('b', null, '90-second quiz'), h('span', null, `Answer as many as you can. Best: ${S.speedBest}`)),
         h('a', { href: '#interview' }, h('b', null, 'Mock interview'), h('span', null, 'A timed practice interview')),

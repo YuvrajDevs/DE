@@ -64,7 +64,7 @@ def run_py(code, tests, spark=False):
     return ns, buf.getvalue()
 
 fails = 0; n = 0; empties = []
-sets = [l for w in C['worlds'] for l in w['lessons']] + C.get('practice', [])
+sets = [l for w in C['worlds'] for l in w['lessons']] + C.get('practice', []) + [{'id': 'sql50:' + k['id'], 'cards': k['questions']} for k in C.get('sql50', {}).get('concepts', [])]
 if True:
     for l in sets:
         for i, c in enumerate(l['cards']):

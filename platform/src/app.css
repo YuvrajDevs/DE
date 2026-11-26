@@ -525,3 +525,28 @@ table.vt tr.dup td { background: var(--bad-soft); }
 .gl-pop{position:absolute;z-index:1000;background:#fff;color:#1b2a4a;border:1px solid #cfdcf3;border-radius:12px;box-shadow:0 10px 30px rgba(20,40,90,.18);padding:12px 14px;font-size:15px;line-height:1.45}
 .gl-pop b{display:block;margin-bottom:4px;color:#1d4ed8}
 .gl-pop .md p{margin:0}
+
+/* SQL in 50: step list + pane, free navigation */
+.big-actions a.feature { border-color: var(--accent); background: linear-gradient(135deg, var(--panel), #fff8db); }
+.s50 { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 18px; align-items: start; }
+.s50-side { position: sticky; top: 76px; max-height: calc(100vh - 100px); overflow: auto; padding: 12px; }
+.s50-side summary { cursor: pointer; padding: 4px 6px 10px; list-style: none; display: flex; justify-content: space-between; gap: 8px; font-size: 14px; }
+.s50-side summary::-webkit-details-marker { display: none; }
+.s50-list { list-style: none; margin: 0; padding: 0; }
+.s50-item a { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; color: var(--ink); text-decoration: none; font-size: 14px; }
+.s50-item.q a { padding-left: 30px; font-size: 13px; color: var(--muted); }
+.s50-item.learn { margin-top: 6px; }
+.s50-item.learn a { font-weight: 600; }
+.s50-item a:hover { background: var(--bg); }
+.s50-item.cur a { background: #e8efff; color: var(--accent); }
+.s50-mark { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--line); font-size: 11px; flex: none; }
+.s50-mark.ok { background: #12805c; border-color: #12805c; color: #fff; }
+.s50-mark.tried { border-color: #d48806; color: #d48806; }
+.s50-mark.seen { border-color: #8fa6d8; color: #8fa6d8; }
+.s50-nav { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 14px 0 30px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+@media (max-width: 900px) {
+  .s50 { grid-template-columns: minmax(0, 1fr); }
+  .s50 > * { min-width: 0; }
+  .s50-side { position: static; max-height: 50vh; }
+}
