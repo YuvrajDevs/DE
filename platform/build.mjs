@@ -18,6 +18,15 @@ const practice = require(path.join(SRC, 'content', 'practice.cjs'));
 const posting = require(path.join(SRC, 'content', 'posting.cjs'));
 const sql50 = require(path.join(SRC, 'content', 'sql50.cjs'));
 const modules = require(path.join(SRC, 'content', 'modules.cjs'));
+{ // practice banks: src/content/bank/*.cjs export { moduleId: [cards] }
+  const dir = path.join(SRC, 'content', 'bank');
+  const banks = fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => f.endsWith('.cjs')).sort().map(f => require(path.join(dir, f))) : [];
+  for (const b of banks) for (const [mid, cards] of Object.entries(b)) {
+    const mod = modules.find(m => m.id === mid);
+    if (!mod) throw new Error('bank for unknown module ' + mid);
+    mod.bank = (mod.bank || []).concat(cards);
+  }
+}
 { // every module lesson must exist, and every lesson should belong to a module
   const ids = new Set(worlds.flatMap(w => w.lessons.map(l => l.id)));
   const used = new Set(modules.flatMap(m => m.lessons));

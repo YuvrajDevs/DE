@@ -64,7 +64,7 @@ def run_py(code, tests, spark=False):
     return ns, buf.getvalue()
 
 fails = 0; n = 0; empties = []
-sets = [l for w in C['worlds'] for l in w['lessons']] + C.get('practice', []) + [{'id': 'sql50:' + k['id'], 'cards': k['questions']} for k in C.get('sql50', {}).get('concepts', [])]
+sets = [l for w in C['worlds'] for l in w['lessons']] + C.get('practice', []) + [{'id': 'sql50:' + k['id'], 'cards': k['questions']} for k in C.get('sql50', {}).get('concepts', [])] + [{'id': 'bank:' + m['id'], 'cards': m.get('bank', [])} for m in C.get('modules', [])]
 if True:
     for l in sets:
         for i, c in enumerate(l['cards']):
@@ -73,7 +73,7 @@ if True:
                 if c['t'] == 'sql':
                     n += 1
                     cols, rows = run_sql(c['solution'], c.get('check'))
-                    if not rows: empties.append(tag + ' :: ' + c['q'][:70])
+                    if not rows and not c.get('allowEmpty'): empties.append(tag + ' :: ' + c['q'][:70])
                     if c.get('starter') and 'starter_ok' in c: pass
                 elif c['t'] == 'py':
                     n += 1

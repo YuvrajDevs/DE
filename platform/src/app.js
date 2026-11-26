@@ -108,6 +108,13 @@ function indexContent() {
     c._concept = k;
     ITEMS[c._id] = c;
   }));
+  (C.modules || []).forEach(m => (m.bank || []).forEach((c, i) => {
+    c._id = `bank:${m.id}:${i}`;
+    c._lesson = 'bank:' + m.id;
+    c._topic = m.id;
+    c._bank = true;
+    if (GRADABLE.has(c.t)) ITEMS[c._id] = c;
+  }));
   (C.practice || []).forEach(set => set.cards.forEach((c, ci) => {
     c._id = `${set.id}:${ci}`;
     c._lesson = set.id;
@@ -321,7 +328,7 @@ function render() {
   if (current && current.cleanup) current.cleanup();
   current = null;
   const section = { map: 'modules', module: 'modules', mpractice: 'modules', lesson: 'modules', world: 'modules', review: 'practice', sql50: 'practice', speed: 'practice', interview: 'practice', arena: 'practice', projects: 'more', posting: 'more', glossary: 'more', settings: 'more' }[view] || view;
-  $$('.nav a, .tabbar a').forEach(a => a.setAttribute('aria-current', a.dataset.r === section ? 'page' : 'false'));
+  $$('.nav a, .tabbar a, .rail a[data-r]').forEach(a => a.setAttribute('aria-current', a.dataset.r === section ? 'page' : 'false'));
   const main = $('main');
   main.replaceChildren();
   current = routes[view](main, arg) || null;
@@ -931,32 +938,52 @@ routes.sql50 = (main, arg) => {
 // ------------------------------------------------------------------ views: modules (learn by skill, any order)
 let LAST_MODULE = null;
 const modLessons = m => m.lessons.map(id => IDX[id]).filter(Boolean);
-const modCards = m => modLessons(m).flatMap(L => L.lesson.cards).filter(c => GRADABLE.has(c.t) && c._id);
+const modCards = m => modLessons(m).flatMap(L => L.lesson.cards).concat(m.bank || []).filter(c => GRADABLE.has(c.t) && c._id);
 function modProgress(m) {
   const ls = modLessons(m), done = ls.filter(L => S.lessons[L.lesson.id]).length;
   S.checks = S.checks || {};
   const total = m.de1.length, ticked = m.de1.filter((_, i) => S.checks[`${m.id}:de1:${i}`]).length;
   return { done, total: ls.length, de1: ticked, de1Total: total };
 }
+const MOD_TINT = { basics: 't-blue', devops: 't-slate', sql: 't-sky', python: 't-yellow', spark: 't-orange', streaming: 't-violet', pipelines: 't-green', orchestration: 't-teal', modelling: 't-pink', quality: 't-green', bigdata: 't-yellow', cloud: 't-sky', governance: 't-slate', ai: 't-violet', scale: 't-orange', project: 't-pink', interview: 't-blue' };
+const MOD_ICONS = {
+  basics: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+  devops: '<circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="9" r="2.5"/><path d="M6 8.5v7M18 11.5c0 4-6 3-11 4.5"/>',
+  sql: '<ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/>',
+  python: '<path d="M8 9l-4 3 4 3M16 9l4 3-4 3M13.5 6l-3 12"/>',
+  spark: '<path d="M13 3L5 14h6l-1 7 8-11h-6z"/>',
+  streaming: '<path d="M3 8c3-3 6 3 9 0s6 3 9 0M3 16c3-3 6 3 9 0s6 3 9 0"/>',
+  pipelines: '<rect x="3" y="4" width="6" height="6" rx="1.5"/><rect x="15" y="14" width="6" height="6" rx="1.5"/><path d="M9 7h4a2 2 0 0 1 2 2v5"/>',
+  orchestration: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>',
+  modelling: '<rect x="9" y="9" width="6" height="6" rx="1"/><rect x="3" y="3" width="5" height="5" rx="1"/><rect x="16" y="3" width="5" height="5" rx="1"/><rect x="3" y="16" width="5" height="5" rx="1"/><rect x="16" y="16" width="5" height="5" rx="1"/><path d="M8 8l1 1M16 8l-1 1M8 16l1-1M16 16l-1-1"/>',
+  quality: '<path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/><path d="M9 12l2 2 4-4"/>',
+  bigdata: '<rect x="4" y="3" width="16" height="5" rx="1.5"/><rect x="4" y="10" width="16" height="5" rx="1.5"/><rect x="4" y="17" width="16" height="4" rx="1.5"/>',
+  cloud: '<path d="M7 18h10a4 4 0 0 0 .5-8A6 6 0 0 0 6 9.5 4.3 4.3 0 0 0 7 18z"/>',
+  governance: '<rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
+  ai: '<path d="M12 3v3M12 18v3M3 12h3M18 12h3M6 6l2 2M16 16l2 2M6 18l2-2M16 8l2-2"/><circle cx="12" cy="12" r="3"/>',
+  scale: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  project: '<path d="M12 3l8 9-8 9-8-9z"/><path d="M12 8v8"/>',
+  interview: '<path d="M4 5h16v10H9l-5 4z"/>',
+};
+const modIcon = id => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${MOD_ICONS[id] || MOD_ICONS.basics}</svg>`;
 const DEPTH = { 'hands-on': ['Hands-on', 'You must be able to do this yourself'], conceptual: ['Conceptual', 'Explain it clearly and know when to use it'] };
 routes.modules = (main) => {
   LAST_MODULE = null;
-  main.append(h('div', { class: 'section-head', style: { marginTop: 0 } },
-    h('div', null, h('div', { class: 'eyebrow' }, 'Learn by skill, in any order'), h('h2', null, 'Modules')),
-    h('a', { class: 'btn small ghost', href: '#map' }, 'Full course in order')));
-  main.append(h('p', { class: 'muted', style: { marginTop: '-4px', maxWidth: '760px' } },
-    'Each module covers one skill, tool or concept: lessons, practice, a checklist of what the DE 1 posting expects, and a "Beyond DE 1" checklist. Open any module, any time.'));
+  main.append(h('section', { class: 'mods-hero' },
+    h('h1', null, 'Learn by module ', h('span', { class: 'spark', 'aria-hidden': 'true' }, '✦')),
+    h('p', null, 'Pick any skill, tool or concept and go deep: lessons, hands-on practice, real incidents, interview questions, and checklists for the DE 1 bar and beyond.'),
+    h('a', { class: 'btn ghost small', href: '#map' }, 'Or follow the full course in order')));
   const groups = [...new Set(C.modules.map(m => m.group))];
   for (const g of groups) {
     main.append(h('h3', { class: 'mod-group' }, g));
-    main.append(h('div', { class: 'mods' }, C.modules.filter(m => m.group === g).map(m => {
-      const p = modProgress(m);
-      return h('a', { class: 'mod-card', href: `#module-${m.id}` },
-        h('div', { class: 'mod-top' }, h('span', { class: 'badge ' + m.depth }, DEPTH[m.depth][0]), h('span', { class: 'muted small' }, `${p.done}/${p.total} lessons`)),
+    main.append(h('div', { class: 'tiles' }, C.modules.filter(m => m.group === g).map(m => {
+      const p = modProgress(m), n = modCards(m).length;
+      const pct = p.total ? Math.round(100 * p.done / p.total) : 0;
+      return h('a', { class: 'tile', href: `#module-${m.id}` },
+        h('span', { class: 'tile-ic ' + (MOD_TINT[m.id] || 't-blue'), html: modIcon(m.id) }),
         h('b', null, m.title),
-        h('span', { class: 'muted small' }, m.why),
-        h('div', { class: 'meter accent' }, h('i', { style: { width: (p.total ? 100 * p.done / p.total : 0) + '%' } })),
-        h('span', { class: 'muted small' }, `DE 1 checklist: ${p.de1}/${p.de1Total}`));
+        h('span', { class: 'tile-meta' }, h('span', { class: 'badge ' + m.depth }, DEPTH[m.depth][0]), `${p.total} lessons · ${n} practice`),
+        h('span', { class: 'tile-bar', title: `${pct}% of lessons done` }, h('i', { style: { width: pct + '%' } })));
     })));
   }
 };
@@ -975,8 +1002,9 @@ routes.module = (main, id) => {
   const tried = cards.filter(c => S.items[c._id]).length;
   main.append(
     h('a', { class: 'btn small ghost', href: '#modules', style: { marginBottom: '10px' } }, '← All modules'),
-    h('div', { class: 'section-head', style: { marginTop: 0 } },
-      h('div', null, h('div', { class: 'eyebrow' }, m.group), h('h2', null, m.title)),
+    h('div', { class: 'section-head mod-head', style: { marginTop: 0 } },
+      h('span', { class: 'tile-ic big ' + (MOD_TINT[m.id] || 't-blue'), html: modIcon(m.id) }),
+      h('div', { style: { flex: 1, minWidth: 0 } }, h('div', { class: 'eyebrow' }, m.group), h('h2', null, m.title)),
       h('span', { class: 'badge big ' + m.depth, title: DEPTH[m.depth][1] }, DEPTH[m.depth][0])),
     h('p', { class: 'muted', style: { marginTop: '-4px', maxWidth: '760px' } }, m.why, ' ', h('i', null, DEPTH[m.depth][1] + '.')),
     h('div', { class: 'grid cols-2 mod-grid' },
@@ -1290,10 +1318,30 @@ function shell() {
     more: '<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>',
   };
   const svg = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[k]}</svg>`;
+  const search = h('input', { type: 'search', class: 'search-in', placeholder: 'Search modules and lessons…', 'aria-label': 'Search modules and lessons', autocomplete: 'off' });
+  const results = h('div', { class: 'search-res', role: 'listbox', hidden: true });
+  const runSearch = () => {
+    const q = search.value.trim().toLowerCase();
+    if (q.length < 2) { results.hidden = true; return; }
+    const mods = (C.modules || []).filter(m => (m.title + ' ' + m.why).toLowerCase().includes(q)).slice(0, 5)
+      .map(m => h('a', { href: `#module-${m.id}`, role: 'option' }, h('b', null, m.title), h('span', null, 'Module')));
+    const les = C.worlds.flatMap(w => w.lessons.map(l => [w, l])).filter(([w, l]) => l.title.toLowerCase().includes(q)).slice(0, 7)
+      .map(([w, l]) => h('a', { href: `#lesson-${l.id}`, role: 'option' }, h('b', null, l.title), h('span', null, w.title)));
+    results.replaceChildren(...(mods.length + les.length ? [...mods, ...les] : [h('p', { class: 'muted' }, 'No matches')]));
+    results.hidden = false;
+  };
+  search.addEventListener('input', runSearch);
+  search.addEventListener('keydown', e => { if (e.key === 'Enter') { const a = $('a', results); if (a) { location.hash = a.getAttribute('href'); search.value = ''; results.hidden = true; } } if (e.key === 'Escape') { results.hidden = true; search.blur(); } });
+  results.addEventListener('click', () => { search.value = ''; results.hidden = true; });
+  document.addEventListener('click', e => { if (!e.target.closest('.search')) results.hidden = true; });
+  document.addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); search.focus(); } });
   document.body.prepend(
+    h('nav', { class: 'rail', 'aria-label': 'Main' },
+      h('a', { class: 'rail-brand', href: '#home', 'aria-label': 'DE Arcade home' }, 'DE'),
+      ...navItems.map(([r, t]) => h('a', { href: '#' + r, 'data-r': r, title: t, html: svg(r) + `<span>${t}</span>` }))),
     h('header', { class: 'topbar' }, h('div', { class: 'topbar-in' },
       h('a', { class: 'brand', href: '#home' }, h('span', { class: 'brand-mark' }, 'DE'), 'DE Arcade'),
-      h('nav', { class: 'nav', 'aria-label': 'Main' }, navItems.map(([r, t]) => h('a', { href: '#' + r, 'data-r': r }, t))),
+      h('div', { class: 'search' }, h('span', { class: 'search-ic', html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>' }), search, h('kbd', null, '⌘K'), results),
       h('div', { class: 'hud', id: 'hud' }))),
   );
   document.body.append(h('nav', { class: 'tabbar', 'aria-label': 'Main' }, navItems.map(([r, t]) => h('a', { href: '#' + r, 'data-r': r, html: svg(r) + `<span>${t}</span>` }))));
