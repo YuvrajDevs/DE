@@ -374,7 +374,8 @@ routes.home = (main) => {
       h('p', null, 'Five places, one job each. Theory builds the concepts. Practice tests them. Hands-on makes you do the work. Scenarios make you decide under pressure. Interview makes you say it out loud. Everything is open: go anywhere, in any order.'),
       h('div', { class: 'row', style: { flexWrap: 'wrap', gap: '8px' } },
         nextT ? h('a', { class: 'btn primary', href: `#theory-${nextT.id}` }, 'Continue theory: ', nextT.title) : null,
-        due ? h('a', { class: 'btn', href: '#review' }, `Review ${due} missed`) : null)),
+        due ? h('a', { class: 'btn', href: '#review' }, `Review ${due} missed`) : null,
+        h('a', { class: 'btn', href: '#build' }, 'Build Turbofan step by step'))),
     h('div', { class: 'tiles' },
       tile('#theory', '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M8 7h8M8 11h6"/>', 't-blue', 'Theory', `${written.length} topics · ${read} read · ${mastered} mastered`, mastered, written.length),
       tile('#practice', '<path d="M6 4v16M18 4v16M3 8v8M21 8v8M6 12h12"/>', 't-green', 'Practice', `${pN} questions · ${pD} right`, pD, pN),
@@ -1250,6 +1251,7 @@ routes.plan = (main) => {
 routes.more = (main) => {
   main.append(h('div', { class: 'section-head', style: { marginTop: 0 } }, h('h2', null, 'More')),
     h('div', { class: 'big-actions' },
+      h('a', { href: '#build', class: 'feature' }, h('b', null, 'Build Turbofan step by step'), h('span', null, '22 chapters from an empty folder: why, every tool, every file, checks, troubleshooting')),
       h('a', { href: '#projects' }, h('b', null, 'Resume projects'), h('span', null, 'Two projects to build, step by step')),
       h('a', { href: '#mock' }, h('b', null, 'Mock interview'), h('span', null, 'Timed rounds: technical, design, behavioural')),
       h('a', { href: '#review' }, h('b', null, 'Review'), h('span', null, 'Questions you missed, spaced out over days')),
@@ -1288,6 +1290,7 @@ routes.projects = (main) => {
   S.projects = S.projects || {};
   main.append(h('div', { class: 'section-head', style: { marginTop: 0 } }, h('div', null, h('div', { class: 'eyebrow' }, 'Build on the side · each step +25 XP'), h('h2', null, 'Resume projects')),
     h('span', { class: 'muted', style: { fontSize: '13px' } }, 'Two flagship projects mapped to the posting. Build them in your own GitHub repo.')));
+  if (C.buildguide) main.append(h('div', { class: 'big-actions', style: { marginBottom: '14px' } }, h('a', { href: '#build', class: 'feature' }, h('b', null, 'Turbofan: the full build guide'), h('span', null, 'Every step, every file and every decision, from an empty folder to a verified pipeline'))));
   main.append(h('div', { class: 'grid' }, C.projects.map(p => {
     const done = S.projects[p.id] || [];
     const n = p.steps.filter((_, i) => done[i]).length;
@@ -1494,6 +1497,44 @@ routes.theory = (main, arg) => {
       pane.append(h('div', { class: 'panel theory-next' },
         h('div', { class: 'row', style: { flexWrap: 'wrap', gap: '8px' } }, doneBtn,
           ...more.map(([tab, label, cs]) => { const g = tabGroups(tab).find(x => x.id === area); const i = g ? g.items.indexOf(cs[0]) : -1; return h('a', { class: 'btn', href: i >= 0 ? `#${tab}-${area}-${i}` : `#${tab}-${area}` }, `${label} for this topic (${cs.length})`); }))));
+    },
+  });
+};
+
+// ------------------------------------------------------------------ view: project build guide
+const BUILD_PARTS = [['Why and setup', 0, 5], ['Rules, data and producer', 5, 10], ['The Spark pipeline', 10, 17], ['Finish, troubleshoot, explain', 17, 99]];
+routes.build = (main, arg) => {
+  const G = C.buildguide;
+  if (!G) { main.append(h('p', null, 'The build guide is not in this build.')); return; }
+  S.build = S.build || {};
+  const groups = BUILD_PARTS.map(([title, a, b], k) => ({ id: 'p' + k, title, items: G.chapters.slice(a, b) })).filter(g => g.items.length);
+  let cur = parseArg(arg);
+  if (!groups.some(g => g.id === cur.g)) {
+    const id = arg || S.buildLast;
+    const g = id && groups.find(x => x.items.some(c => c.id === id));
+    cur = g ? { g: g.id, i: g.items.findIndex(c => c.id === id) } : { g: groups[0].id, i: 0 };
+  }
+  const done = G.chapters.filter(c => S.build[c.id]).length;
+  Browser(main, {
+    tab: 'build', eyebrow: `${G.chapters.length} chapters · ${done} done · every file is the project's real code`, title: 'Build Turbofan step by step',
+    blurb: 'Build the Turbofan Telemetry project from an empty folder: why it exists, every tool and why it was chosen (with alternatives, advantages and impact), every file in full, a check at the end of each chapter, troubleshooting for every known error, and how to explain it in an interview.',
+    groups, cur, hrefOf: (g, i) => `#build-${g}-${i}`, labelFn: c => c.title,
+    markFn: c => S.build[c.id] ? 'ok' : '',
+    renderPane: (pane, here, { redraw }) => {
+      const c = here.it;
+      S.buildLast = c.id; save();
+      const body = h('div', { class: 'md theory-md', html: md(c.md) });
+      $$('pre', body).forEach(pre => {   // copy button on every code block
+        const text = pre.innerText.trimEnd();
+        pre.style.position = 'relative';
+        pre.append(h('button', { class: 'btn small', style: { position: 'absolute', top: '6px', right: '6px' }, onclick: () => { navigator.clipboard?.writeText(text).then(() => toast('Copied'), () => toast('Copy blocked: select the text')); } }, 'Copy'));
+      });
+      const heads = $$('h2', body);
+      heads.forEach((x, k) => { x.id = `bg-${c.id}-${k}`; });
+      const toc = heads.length > 3 ? h('nav', { class: 'toc', 'aria-label': 'On this page' }, heads.map(x => h('a', { href: '#', onclick: e => { e.preventDefault(); x.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }, x.textContent))) : null;
+      const label = () => S.build[c.id] ? '✓ Done: the check passed' : 'Mark done: the check at the end passed';
+      const btn = h('button', { class: 'btn' + (S.build[c.id] ? ' ok' : ' primary'), onclick: () => { S.build[c.id] = !S.build[c.id]; save(); btn.className = 'btn' + (S.build[c.id] ? ' ok' : ' primary'); btn.textContent = label(); redraw(); } }, label());
+      pane.append(h('article', { class: 'card theory' }, h('div', { class: 'eyebrow kind' }, here.g.title), toc, body), h('div', { class: 'panel theory-next' }, btn));
     },
   });
 };
