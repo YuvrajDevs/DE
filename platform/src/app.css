@@ -684,3 +684,140 @@ h1, h2, h3 { letter-spacing: -0.01em; }
 .opt { max-width: 100%; min-width: 0; }
 .opt > span:last-child { min-width: 0; overflow-wrap: anywhere; }
 .theory-q, .theory-q .card { min-width: 0; max-width: 100%; }
+
+/* ================================================================== calm reading layer
+   VOICE everyday study tool, read for hours: quiet, roomy, nothing shouting
+   IDEA a well-set technical book: one comfortable column, clear section breaks, code you can copy
+   PICTURE the reading column itself; list, tables and code given air
+   COLOUR near-white paper + soft ink, one blue for links and state; a true dark mode for night study
+   TYPE Figtree for headings and UI, Figtree 17px body at 1.75, JetBrains Mono for code
+   LAYOUT laptop: slim list on the left, centred 68ch column; phone: one column, list folds away */
+:root {
+  color-scheme: light dark;
+  --bg: light-dark(#f7f8fa, #101318);
+  --panel: light-dark(#ffffff, #171b22);
+  --panel-2: light-dark(#f1f3f7, #1e232c);
+  --line: light-dark(#e6e9ef, #2a303b);
+  --ink: light-dark(#1d2330, #e4e7ee);
+  --ink-2: light-dark(#5a6375, #9aa3b5);
+  --muted: var(--ink-2);
+  --accent: light-dark(#2f5bff, #7c9cff);
+  --accent-ink: light-dark(#ffffff, #0d1220);
+  --accent-soft: light-dark(#ecf1ff, #1e2a4a);
+  --ok: light-dark(#12875a, #4cc38a); --ok-soft: light-dark(#e2f5ec, #16301f);
+  --bad: light-dark(#d1344b, #ff7a8c); --bad-soft: light-dark(#fde6e9, #3a1a20);
+  --xp: light-dark(#9a6b00, #f2c14e); --xp-soft: light-dark(#fff6d9, #33290f); --xp-fill: #ffc629;
+  --warn: light-dark(#a96c00, #f2c14e);
+  --code-bg: light-dark(#f5f7fb, #12161d);
+  --quote-bg: light-dark(#f3f6ff, #172036);
+  --hl-kw: light-dark(#1f5bff, #8fb0ff); --hl-str: light-dark(#12875a, #6fd4a1); --hl-num: light-dark(#b45309, #f0a35e); --hl-com: light-dark(#7d8db0, #7a849a); --hl-fn: light-dark(#7c3aed, #c4a6ff); --hl-ty: light-dark(#9a6b00, #f2c14e);
+  --shadow: 0 1px 2px rgba(16,20,30,.04), 0 6px 20px -14px rgba(16,20,30,.18);
+  --f-display: "Figtree", "Plus Jakarta Sans", system-ui, sans-serif;
+  --f-body: "Figtree", "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --read: 17px;
+  --r: 14px;
+}
+:root[data-theme=light] { color-scheme: light; }
+:root[data-theme=dark] { color-scheme: dark; }
+body { font-size: 15.5px; line-height: 1.6; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+h1, h2, h3 { font-stretch: normal; letter-spacing: -0.015em; font-weight: 700; }
+.eyebrow { font-family: var(--f-body); font-size: 13px; letter-spacing: 0; text-transform: none; font-weight: 500; color: var(--ink-2); }
+main { padding-block: 32px 80px; }
+.topbar { background: color-mix(in srgb, var(--panel) 88%, transparent); }
+.search-in:focus, .search kbd, .search-res { background: var(--panel); }
+.panel { padding: 22px; }
+.card { padding: clamp(20px, 3.2vw, 44px); box-shadow: none; }
+.section-head { margin: 8px 0 14px; }
+.section-head h2 { font-size: 26px; }
+.lib-blurb { margin: 0 0 22px; max-width: 72ch; font-size: 15.5px; line-height: 1.65; }
+
+/* two-pane library: slim list, generous gap */
+.lib { grid-template-columns: 280px minmax(0, 1fr); gap: 32px; }
+.lib-side { padding: 16px 12px; border-radius: var(--r); top: 80px; }
+.lib-g > summary { padding: 12px 8px; font-size: 14.5px; }
+.lib-g li a { padding: 8px 10px; font-size: 14px; line-height: 1.45; border-radius: 10px; color: var(--ink-2); }
+.lib-g li a:hover { background: var(--panel-2); color: var(--ink); }
+.lib-g li.cur a { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.lib.wide { grid-template-columns: minmax(0, 1fr); }
+.lib.wide .lib-side { display: none; }
+.readbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; margin: 0 0 12px; }
+.readbar .btn { min-height: 34px; padding: 5px 12px; font-size: 13.5px; font-weight: 500; }
+.readbar .lbl { color: var(--ink-2); font-size: 13px; margin-right: 2px; }
+
+/* the reading column */
+/* text lines stay ~68 characters; code blocks and tables may use the full card width */
+.lib-pane .card.theory { padding-inline: clamp(18px, 4.5vw, 64px); }
+.lib-pane .card.theory > * { margin-inline: auto; max-width: 980px; }
+.md, .theory-md { max-width: none; }
+.theory-md > :is(p, ul, ol, h1, h2, h3, h4, blockquote) { max-width: 68ch; }
+.lib-pane > .card:not(.theory) .md > :is(p, ul, ol, h3, h4, blockquote) { max-width: 68ch; }
+.theory .theory-h, .theory-md h1 { font-size: clamp(28px, 3.4vw, 38px); line-height: 1.15; margin: 6px 0 22px; }
+.theory-md { font-size: var(--read); line-height: 1.75; }
+.theory-md p { margin: 0 0 1.05em; }
+.theory-md ul, .theory-md ol { padding-left: 1.3em; margin: 0 0 1.2em; }
+.theory-md li { margin: .4em 0; line-height: 1.7; }
+.theory-md li::marker { color: var(--ink-2); }
+.theory-md h2 { font-size: 1.4em; margin: 2.4em 0 .7em; padding-top: 0; border-top: 0; line-height: 1.25; }
+.theory-md h2:first-child { margin-top: .6em; }
+.theory-md h3 { font-size: 1.12em; margin: 1.9em 0 .55em; }
+.theory-md h4 { font-size: 1em; margin: 1.5em 0 .4em; }
+.theory-md strong { font-weight: 650; }
+.theory-md a { text-underline-offset: 3px; }
+.theory-md blockquote { margin: 0 0 1.6em; padding: 16px 20px; background: var(--quote-bg); border-left: 0; border-radius: 12px; }
+.theory-md hr { border: 0; border-top: 1px solid var(--line); margin: 2.4em 0; }
+.theory-md code { font-size: .86em; padding: .12em .4em; border-radius: 6px; background: var(--code-bg); border: 1px solid var(--line); overflow-wrap: anywhere; }
+.theory-md pre { margin: 0 0 1.6em; padding: 18px 20px; border-radius: 12px; font-size: 13.5px; line-height: 1.7; background: var(--code-bg); border: 1px solid var(--line); overflow-x: auto; }
+.theory-md pre code { border: 0; padding: 0; background: none; overflow-wrap: normal; }
+.theory-md table { display: block; overflow-x: auto; max-width: 100%; border-collapse: collapse; font-size: .9em; line-height: 1.55; margin: 0 0 1.8em; min-width: 0; }
+.theory-md th, .theory-md td { border: 0; border-bottom: 1px solid var(--line); padding: 11px 16px 11px 0; vertical-align: top; }
+.theory-md th { background: none; font-weight: 600; color: var(--ink-2); font-size: .92em; border-bottom: 1.5px solid color-mix(in srgb, var(--ink) 25%, var(--line)); }
+.theory-md tr:last-child td { border-bottom: 0; }
+.toc { gap: 8px; margin: 0 0 32px; padding: 16px 0 0; border-top: 1px solid var(--line); }
+.toc a { font-size: 13px; padding: 5px 12px; background: transparent; color: var(--ink-2); }
+.theory-next { margin: 20px 0 0; padding: 18px 22px; }
+.theory-sub { margin: 36px 0 12px; }
+.theory-q { margin-bottom: 14px; }
+.s50-nav { margin: 22px 0 40px; }
+
+/* cards in Practice / Interview / Scenarios read like the theory column */
+.lib-pane > .card:not(.theory) { font-size: 16px; line-height: 1.7; }
+
+/* home */
+.mods-hero { margin: 26px auto 30px; gap: 14px; }
+.mods-hero h1 { font-size: clamp(30px, 4.4vw, 42px); }
+.mods-hero p { font-size: 16.5px; line-height: 1.65; }
+.tiles { gap: 16px; }
+.tile { padding: 22px; gap: 12px; border-radius: 16px; }
+.tile:hover { border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+.big-actions a.feature { background: var(--accent-soft); }
+
+/* hard-coded light colours from older layers, mapped to tokens */
+.s50-item.cur a { background: var(--accent-soft); }
+.gl:hover, .gl:focus-visible { background: var(--xp-soft); }
+.gl-pop { background: var(--panel); color: var(--ink); border-color: var(--line); }
+.gl-pop b { color: var(--accent); }
+.t-blue, .t-sky, .t-yellow, .t-orange, .t-violet, .t-green, .t-teal, .t-pink, .t-slate { background: var(--panel-2); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme=light]) .tile-ic { filter: saturate(1.2) brightness(1.4); }
+}
+:root[data-theme=dark] .tile-ic { filter: saturate(1.2) brightness(1.4); }
+
+@media (max-width: 900px) {
+  .lib, .lib.wide { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .lib .lib-side { position: static; max-height: none; }
+  .readbar .wide-btn { display: none; }
+  .theory-md { font-size: calc(var(--read) - .5px); }
+}
+@media (max-width: 600px) {
+  main { padding-block: 18px 96px; }
+  .card { border-radius: 12px; }
+  .theory-md pre { padding: 14px; font-size: 12.5px; }
+}
+.theory-md pre, .theory-md code, .md pre, .md code { font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }
+.theory-md details.fullfile { margin: 0 0 1.8em; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.theory-md details.fullfile > summary { cursor: pointer; padding: 14px 18px; font-weight: 600; font-size: .92em; list-style: none; display: flex; align-items: center; gap: 10px; }
+.theory-md details.fullfile > summary::-webkit-details-marker { display: none; }
+.theory-md details.fullfile > summary::before { content: "▸"; color: var(--accent); transition: transform .15s; }
+.theory-md details.fullfile[open] > summary::before { transform: rotate(90deg); }
+.theory-md details.fullfile > pre { margin: 0 14px 14px; }
+.theory-md blockquote strong:first-child { color: var(--accent); }

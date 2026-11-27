@@ -1400,12 +1400,26 @@ function Browser(main, { tab, eyebrow, title, blurb, groups, cur, hrefOf, render
   const redraw = () => draw();
   renderPane(pane, here, { redraw, nextHref: next ? hrefOf(next.g.id, next.i) : null });
   draw();
+  // reading controls: text size and a focused, list-free view (remembered per viewer)
+  const pref = (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } };
+  const setPref = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* storage unavailable */ } };
+  const SIZES = ['15px', '16px', '17px', '18px', '19.5px'];
+  let size = SIZES.indexOf(pref('de-read-size', '17px')); if (size < 0) size = 2;
+  const applySize = () => { document.documentElement.style.setProperty('--read', SIZES[size]); setPref('de-read-size', SIZES[size]); };
+  applySize();
+  const libEl = h('div', { class: 'lib' + (pref('de-wide', '') === '1' ? ' wide' : '') });
+  const wideBtn = h('button', { class: 'btn ghost wide-btn', onclick: () => { libEl.classList.toggle('wide'); setPref('de-wide', libEl.classList.contains('wide') ? '1' : ''); wideBtn.textContent = libEl.classList.contains('wide') ? 'Show list' : 'Focus: hide list'; } }, libEl.classList.contains('wide') ? 'Show list' : 'Focus: hide list');
+  const readbar = h('div', { class: 'readbar' },
+    h('span', { class: 'lbl' }, 'Text'),
+    h('button', { class: 'btn ghost', 'aria-label': 'Smaller text', onclick: () => { size = Math.max(0, size - 1); applySize(); } }, 'A−'),
+    h('button', { class: 'btn ghost', 'aria-label': 'Larger text', onclick: () => { size = Math.min(SIZES.length - 1, size + 1); applySize(); } }, 'A+'),
+    wideBtn);
+  libEl.append(
+    h('aside', { class: 'lib-side panel' }, h('details', { class: 'lib-all', open: window.innerWidth > 900 ? true : null }, h('summary', null, h('b', null, 'All ' + title.toLowerCase()), h('span', { class: 'muted small' }, ' tap to jump anywhere')), q, list)),
+    h('div', { style: { minWidth: 0 } }, readbar, pane, nav));
   main.append(
     h('div', { class: 'section-head', style: { marginTop: 0 } }, h('div', null, h('div', { class: 'eyebrow' }, eyebrow), h('h2', null, title))),
-    blurb ? h('p', { class: 'muted lib-blurb' }, blurb) : null, top || null,
-    h('div', { class: 'lib' },
-      h('aside', { class: 'lib-side panel' }, h('details', { class: 'lib-all', open: window.innerWidth > 900 ? true : null }, h('summary', null, h('b', null, 'All ' + title.toLowerCase()), h('span', { class: 'muted small' }, ' tap to jump anywhere')), q, list)),
-      h('div', { style: { minWidth: 0 } }, pane, nav)));
+    blurb ? h('p', { class: 'muted lib-blurb' }, blurb) : null, top || null, libEl);
   const c = $('.lib-list li.cur'); if (c && window.innerWidth > 900) c.scrollIntoView({ block: 'nearest' });
 }
 const parseArg = (arg) => { const m = /^(.*?)(?:-(\d+))?$/.exec(arg || ''); return { g: m[1] || null, i: m[2] ? +m[2] : 0 }; };

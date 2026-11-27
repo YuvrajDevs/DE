@@ -290,19 +290,66 @@ Open **http://localhost:8080**: Kafka UI. There are no topics yet.
 
 ## The data module
 
-Create `telemetry/cmapss.py`:
+You will create `telemetry/cmapss.py`. It has one job: **get the NASA data and turn it into Python dictionaries**. First the walkthrough, piece by piece, then the complete file to copy.
 
-{{file:telemetry/cmapss.py}}
+### Walkthrough: `telemetry/cmapss.py`
 
-**Read it like this:**
-- `URL`: the official NASA Prognostics Center mirror. The first link tried (on data.nasa.gov) was dead (F3). External links move: pin the source and document it.
-- `download()`: downloads the zip once, extracts the inner `CMAPSSData.zip`, and writes the `.txt` files to `data/cmapss/`. It skips the download if the files already exist (safe to run twice: **idempotent**).
-- `load(subset)`: turns each line of `train_FD001.txt` into a dictionary like `{"unit": 7, "cycle": 113, "s1": 518.67, ...}`.
-- `synthetic()`: if the file is missing (no internet, link moved), it generates fake engines with the **same shape** and realistic drift so the project still runs. A **fallback** is good engineering for any external dependency.
+**1. The docstring and imports**
 
-It needs `config.py` for the `DATA_DIR` path. Create `telemetry/config.py` now (explained fully in chapter 5):
+{{snip:telemetry/cmapss.py|"""Download and parse|from .config import DATA_DIR}}
 
-{{file:telemetry/config.py}}
+- The text in triple quotes at the top is a **module docstring**: the first thing anyone (and `help()`) reads. Always say what a file does and where its data comes from.
+- `io`, `random`, `urllib.request`, `zipfile` are all in Python's **standard library**: nothing to install. `urllib.request` downloads, `zipfile` opens zip archives, `io.BytesIO` lets us treat bytes in memory as if they were a file.
+- `from .config import DATA_DIR`: the dot means "from the **same package**" (`telemetry`). This is a **relative import**. It works because the folder has an `__init__.py`, which makes it a package.
+
+> **Python lesson: modules and packages.** A `.py` file is a **module**. A folder with `__init__.py` is a **package**. You run code inside a package with `python -m telemetry.cli` (the `-m` flag), never `python telemetry/cli.py`, or relative imports like `from .config` fail with "attempted relative import with no known parent package".
+
+**2. Constants**
+
+{{snip:telemetry/cmapss.py|URL = |DEFAULT_SUBSETS}}
+
+- `URL`: the official NASA Prognostics Center mirror. The `+` signs are URL-encoded spaces. The first link tried (data.nasa.gov) was dead (F3): pin the source and document it.
+- `SENSORS = [f"s{i}" for i in range(1, 22)]` is a **list comprehension** that builds `["s1", "s2", ..., "s21"]`. `range(1, 22)` stops **before** 22.
+- `COLUMNS` is the order of values on each line of the file: unit, cycle, 3 settings, 21 sensors (26 numbers).
+- Names in `CAPITALS` are **constants** by convention: set once, never changed.
+
+**3. `download()`: fetch once, extract**
+
+{{snip:telemetry/cmapss.py|def download|print(f"extracted to}}
+
+- `out = DATA_DIR / "cmapss"`: `DATA_DIR` is a `pathlib.Path`, and `/` joins paths safely on every operating system.
+- The `if ... exists() and not force: return` line makes the function **idempotent**: running it twice does not download twice. You will see this idea everywhere in data engineering.
+- `urlopen(URL, timeout=120)`: always set a **timeout** on network calls, or a stuck connection hangs your program forever.
+- The NASA zip contains **another zip** (`CMAPSSData.zip`). `next(n for n in ... if n.endswith(...))` finds the first matching name: a **generator expression** inside `next()`.
+- `(out / name).write_bytes(...)` writes each `.txt` file.
+
+**4. `load()`: text lines → dictionaries**
+
+{{snip:telemetry/cmapss.py|def load|return rows}}
+
+- Each line looks like `1 1 -0.0007 -0.0004 100.0 518.67 641.82 ...`: numbers separated by spaces. `line.split()` (no argument) splits on any run of whitespace and ignores trailing spaces.
+- `dict(zip(COLUMNS, vals))` pairs each column name with its value: `{"unit": 1.0, "cycle": 1.0, "op_setting_1": -0.0007, ...}`. `zip` walks two lists side by side.
+- `unit` and `cycle` are converted back to `int` because they are identifiers and counters, not measurements.
+- If the file is missing, it **falls back** to `synthetic(subset)` and says so. The project still runs offline.
+
+> **Engineering lesson: design a fallback for every external dependency.** Links move, APIs go down. A fallback with the same shape keeps development and tests moving, and the message makes the downgrade visible instead of silent.
+
+**5. `synthetic()`: fake engines with the same shape**
+
+{{snip:telemetry/cmapss.py|_BASE = |return rows}}
+
+- `_BASE` holds each sensor's healthy average and `_DRIFT` how far it moves by end of life (+ rises, − falls). The leading `_` means "internal, not for other modules".
+- `random.Random(f"{subset}-{seed}")` creates a **seeded** random generator: the same seed gives the same "random" engines every time, so tests are repeatable.
+- `wear = (cycle / life) ** 3`: wear grows slowly at first and fast near the end, like real degradation.
+- `rnd.gauss(0, noise)` adds small normally distributed noise, like a real sensor.
+
+{{full:telemetry/cmapss.py}}
+
+It needs `config.py` for the `DATA_DIR` path. Create `telemetry/config.py` now (every setting is explained in chapter 5):
+
+{{full:telemetry/config.py}}
+
+> **Python lesson: `pathlib` and environment variables.** `Path(__file__).resolve().parents[1]` means "the folder above the folder this file is in", which is the project root wherever you run from. `os.environ.get("TT_LAKE", default)` reads an environment variable if set, otherwise uses the default. That is how one codebase runs on a laptop, in Docker and in the cloud without edits.
 
 Download the data:
 

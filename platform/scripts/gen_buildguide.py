@@ -27,6 +27,44 @@ def lang_of(path):
 
 
 def expand(md, repo):
+    def read(path):
+        f = repo / path.strip()
+        if not f.exists():
+            raise SystemExit(f"missing project file referenced in guide: {path}")
+        return f.read_text().rstrip("\n")
+
+    def fenced(body, lang):
+        fence = "````" if "```" in body else "```"
+        return f"{fence}{lang}\n{body}\n{fence}"
+
+    def snip(m):
+        # {{snip:path|first-line text|last-line text}}: the lines from the first line containing START
+        # through the next line (at or after it) containing END, from the real file.
+        # END may be BLANK: stop before the next empty line.
+        path, start, end = (x.strip() for x in m.group(1).split("|", 2))
+        lines = read(path).split("\n")
+        try:
+            i = next(k for k, l in enumerate(lines) if start in l)
+            if end == "BLANK":
+                j = next((k - 1 for k in range(i + 1, len(lines)) if not lines[k].strip()), len(lines) - 1)
+            else:
+                j = next(k for k in range(i, len(lines)) if end in lines[k])
+        except StopIteration:
+            raise SystemExit(f"snippet not found in {path}: {start!r} .. {end!r}")
+        return fenced("\n".join(lines[i:j + 1]), lang_of(path))
+
+    def full(m):
+        path = m.group(1).strip()
+        return (f'<details class="fullfile"><summary>Complete <code>{path}</code> to copy</summary>\n\n'
+                f"{fenced(read(path), lang_of(path))}\n\n</details>")
+
+    # markers sit alone on a line, so match to the line's last "}}" (code text may contain braces)
+    md = re.sub(r"^\{\{snip:(.+)\}\}[ \t]*$", snip, md, flags=re.M)
+    md = re.sub(r"^\{\{full:(.+)\}\}[ \t]*$", full, md, flags=re.M)
+    left = re.findall(r"\{\{(?:snip|full|file):", md)
+    if left and "{{file:" not in md:
+        raise SystemExit(f"unexpanded markers: {left}")
+
     def rep(m):
         path, _, lang = m.group(1).partition("|")
         f = repo / path.strip()

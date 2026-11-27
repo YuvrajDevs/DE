@@ -9,23 +9,56 @@
 - **Alternatives:** Power BI / Databricks SQL dashboards (what Cummins would use in production on gold tables), Grafana (great for time-series metrics), Superset.
 - **Impact:** a demo you can show in an interview in 10 seconds.
 
-Create `dashboard/app.py`:
+### Walkthrough: `dashboard/app.py`
 
-{{file:dashboard/app.py}}
+**1. Loading tables safely**
+
+{{snip:dashboard/app.py|st.set_page_config|return pd.DataFrame()}}
+
+- `st.set_page_config(layout="wide")` must be the first Streamlit call.
+- `load()` reads a Delta table into a **pandas DataFrame** with delta-rs. If the table does not exist yet, it returns an empty DataFrame so the page still renders.
+
+**2. A live fragment**
+
+{{snip:dashboard/app.py|@st.fragment(run_every=10)|c[4].metric}}
+
+- Streamlit re-runs your script top to bottom on every interaction. `@st.fragment(run_every=10)` re-runs **only this function** every 10 seconds: a live panel without reloading the page.
+- `st.columns(5)` creates five side-by-side slots; `.metric(label, value)` shows a big number.
+- `(state.alert_level == 2).sum()` is pandas: compare a column to 2 (True/False per row), and summing counts the Trues.
+
+**3. Charts and tables**
+
+{{snip:dashboard/app.py|left, right = st.columns|st.bar_chart}}
+
+- `pivot_table(index="window_start", columns="fleet", values="avg_health_index")` turns rows into one column per fleet, which `st.line_chart` draws as one line each.
+- `sort_values("ewma_health", ascending=False).head(15)`: the 15 engines closest to failure.
+- `.map({0: "OK", 1: "WARNING", 2: "CRITICAL"})` turns codes into labels.
+- `value_counts()` counts dead letters per reason for the bar chart.
+
+{{full:dashboard/app.py}}
 
 ```bash
 streamlit run dashboard/app.py         # http://localhost:8501
 ```
 
-`@st.fragment(run_every=10)` refreshes only the live part every 10 seconds. You see engines reporting, critical and warning counts, alerts, dead letters by reason, the engines closest to failure, and fleet health per minute.
-
 ## Option B: run everything in Docker (no Java/Python on your machine)
 
-Create `Dockerfile`:
+### Walkthrough: `Dockerfile`
 
-{{file:Dockerfile|dockerfile}}
+{{snip:Dockerfile|FROM python|RUN pip install}}
 
-- Python 3.12 + Java 17 + all requirements in one image. The `ln -s ... default-java` line makes `JAVA_HOME` work on both Intel and Apple Silicon.
+| Line | Meaning |
+|---|---|
+| `FROM python:3.12-slim-bookworm` | Start from the official small Python 3.12 image on Debian 12. Pinned, so builds are repeatable |
+| `RUN apt-get install ... openjdk-17-jre-headless procps` | Install Java 17 (Spark needs it) and `ps` (Spark's scripts use it). `--no-install-recommends` and deleting the apt lists keep the image small |
+| `RUN ln -s ... default-java` | Creates one fixed Java path whatever the CPU architecture (Intel or Apple Silicon), so `JAVA_HOME` always works |
+| `ENV JAVA_HOME=... PYTHONUNBUFFERED=1` | Tell Spark where Java is; print Python output immediately (useful for logs) |
+| `WORKDIR /app` | All later commands run in `/app` |
+| `COPY requirements.txt .` then `RUN pip install` | Copy only the requirements first, so Docker **caches** the slow install step and reuses it when only your code changes |
+
+> **Docker lesson: image vs container.** An **image** is a frozen file system plus settings (built from a Dockerfile). A **container** is a running instance of an image. `docker compose` starts several containers with networking between them, from one YAML file.
+
+{{full:Dockerfile}}
 - The `app` service in `docker-compose.yml` mounts your folder, keeps Spark's downloaded jars in a volume (`ivy-cache`) and connects to Kafka at `kafka:19092` (the inside-Docker address from chapter 3).
 
 ```bash
@@ -43,11 +76,22 @@ docker compose --profile app run --rm app produce --rate 500
 - **Alternatives:** Azure DevOps Pipelines (common at enterprises like Cummins), GitLab CI, Jenkins.
 - **Impact:** broken code cannot quietly reach `main`.
 
-Create `.github/workflows/ci.yml`:
+### Walkthrough: `.github/workflows/ci.yml`
 
-{{file:.github/workflows/ci.yml|yaml}}
+{{snip:.github/workflows/ci.yml|name: ci|python -m pytest}}
 
-It installs only pytest and runs the unit tests: no Spark, no Kafka, finishes in seconds. The Spark parity test is skipped there (`importorskip`) and is run locally. A fuller CI would add a linter (ruff) and a small Spark integration test.
+| Line | Meaning |
+|---|---|
+| `on: [push, pull_request]` | Run on every push and every pull request |
+| `runs-on: ubuntu-latest` | A fresh Linux virtual machine from GitHub each time |
+| `actions/checkout@v4` | Download your repository into the machine |
+| `actions/setup-python@v5` with `3.12` | Install Python 3.12 |
+| `pip install pytest==8.3.4` | Only pytest: the unit tests need nothing else |
+| `python -m pytest -q tests` | Run the tests. A failing test fails the run, and GitHub shows a red cross on the commit |
+
+YAML lesson: indentation **is** structure in YAML (2 spaces per level, never tabs); `- uses:` items are a list of steps.
+
+It finishes in seconds because it needs no Spark or Kafka. The Spark parity test is skipped there (`importorskip`) and is run locally. A fuller CI would add a linter (ruff) and a small Spark integration test.
 
 **Check:** the dashboard shows your engines, and after you push to GitHub (chapter 20) the Actions tab shows a green run.
 
@@ -56,9 +100,30 @@ It installs only pytest and runs the unit tests: no Spark, no Kafka, finishes in
 
 A pipeline that works for 50,000 events is not proof that it works for 5 million. Measure it.
 
-Create `scripts/loadtest.py`:
+### Walkthrough: `scripts/loadtest.py`
 
-{{file:scripts/loadtest.py}}
+**1. Running the CLI from Python and counting silver quickly**
+
+{{snip:scripts/loadtest.py|def cli(|return pc.sum(pc.ends_with}}
+
+- `subprocess.run([...], check=True, capture_output=True, text=True)` runs a command, raises if it fails, and captures its output as text: scripts can drive your CLI exactly as you would.
+- `silver_count` with no filter sums `num_records` from the Delta log's **add actions**: the row count of every file, read from metadata, without reading any data. Fast enough to poll every 2 seconds.
+
+**2. Phase 1: the backlog drain**
+
+{{snip:scripts/loadtest.py|# ---- phase 1: backlog|events/s end to end", flush=True)}}
+
+- Produce ~450,000 events with **no rate limit** and no manifest, **then** start the stream as a separate process (`subprocess.Popen`, which does not wait).
+- Poll silver until every event is there. Throughput = events ÷ total wall-clock time, cold start included. The comment explains why the first, cleverer metric was wrong (F16).
+
+**3. Phase 2: steady state**
+
+{{snip:scripts/loadtest.py|# ---- phase 2: steady state|latency p50}}
+
+- For each target rate, produce for 60 seconds with fresh engine IDs (`--start-loop`), wait until silver has them all, then compute latency percentiles for exactly those engines.
+- `try / finally` makes sure the stream process is stopped even if the test fails.
+
+{{full:scripts/loadtest.py}}
 
 Stop any running stream first, then:
 
@@ -122,6 +187,7 @@ These happened when the project was first built, or when it was rebuilt to write
 | F16 | Impossible throughput numbers | Rate computed over a window inside one micro-batch | Wall-clock throughput; cross-check with Delta history |
 | new | `Failed to acquire idempotence PID ... Coordinator load in progress: retrying` | Kafka just started and is still loading | Harmless; the producer retries by itself |
 | new | `ERROR Inbox: Ignoring error ... RejectedExecutionException` right after a crash or stop | Spark shutting down its executors | Harmless shutdown noise |
+| new | `report` seems stuck for minutes (normally ~2 s) while the stream is writing | Rare: it read the tables in the middle of busy commits | Ctrl+C and run it again |
 | — | `JAVA_HOME is not set` / `UnsupportedClassVersionError` | Java missing or too old | Install Java 17 or 21 |
 | — | `NoBrokersAvailable` / connection refused on 9092 | Kafka not running, or wrong address | `docker compose ps`; use `localhost:9092` outside Docker, `kafka:19092` inside |
 | — | Changed code in silver/gold and the stream fails to restart | Stateful logic changed, incompatible with the old checkpoint | `python -m telemetry.cli reset`, recreate the topic, re-run (in production: new checkpoint + backfill from bronze) |
