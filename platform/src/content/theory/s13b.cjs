@@ -100,22 +100,21 @@ module.exports = {
   SELECT *, ROW_NUMBER() OVER (PARTITION BY engine_id ORDER BY streak_days DESC, streak_start) AS rn FROM islands
 )
 SELECT engine_id, streak_start, streak_end, streak_days FROM ranked WHERE rn = 1 ORDER BY engine_id`, hint: 'day − row_number is constant inside a streak.' }),
-      sql({ q: '**Sessionize sensor readings.** In «sensor_readings», a new session starts for an engine when the gap from that engine\'s previous reading is **more than 10 minutes** (or it is the first reading). Return per engine and session: «engine_id, session_no» (1, 2, …), «started», «ended», «readings». Sort by «engine_id, session_no».', tables: ['sensor_readings'], level: 3,
+      sql({ q: '**Sessionize order activity.** In «raw_orders_feed», a new activity session starts for an order when the gap from that order\'s previous event («updated_at») is **more than 12 hours** (or it is the first event). Order events by «updated_at, event_id». Return per order and session: «order_id, session_no» (1, 2, …), «started», «ended», «events». Sort by «order_id, session_no».', tables: ['raw_orders_feed'], level: 3,
         solution: `WITH g AS (
-  SELECT engine_id, ts,
-         CASE WHEN LAG(ts) OVER (PARTITION BY engine_id ORDER BY ts, reading_id) IS NULL
-                OR (julianday(ts) - julianday(LAG(ts) OVER (PARTITION BY engine_id ORDER BY ts, reading_id))) * 1440 > 10
-              THEN 1 ELSE 0 END AS new_session,
-         reading_id
-  FROM sensor_readings
+  SELECT order_id, updated_at, event_id,
+         CASE WHEN LAG(updated_at) OVER (PARTITION BY order_id ORDER BY updated_at, event_id) IS NULL
+                OR (julianday(updated_at) - julianday(LAG(updated_at) OVER (PARTITION BY order_id ORDER BY updated_at, event_id))) * 24 > 12
+              THEN 1 ELSE 0 END AS new_session
+  FROM raw_orders_feed
 ), s AS (
-  SELECT engine_id, ts,
-         SUM(new_session) OVER (PARTITION BY engine_id ORDER BY ts, reading_id ROWS UNBOUNDED PRECEDING) AS session_no
+  SELECT order_id, updated_at,
+         SUM(new_session) OVER (PARTITION BY order_id ORDER BY updated_at, event_id ROWS UNBOUNDED PRECEDING) AS session_no
   FROM g
 )
-SELECT engine_id, session_no, MIN(ts) AS started, MAX(ts) AS ended, COUNT(*) AS readings
-FROM s GROUP BY engine_id, session_no
-ORDER BY engine_id, session_no`, hint: 'Flag new sessions with LAG, then a running SUM of the flag is the session number.' }),
+SELECT order_id, session_no, MIN(updated_at) AS started, MAX(updated_at) AS ended, COUNT(*) AS events
+FROM s GROUP BY order_id, session_no
+ORDER BY order_id, session_no`, hint: 'Flag new sessions with LAG, then a running SUM of the flag is the session number. Duplicated deliveries of the same event stay in the same session (gap 0).' }),
       sql({ q: '**Warranty funnel.** Count how many CRFs reached each stage: «crfs» (all CRFs), «with_sr» (have a service request), «with_pir» (a PIR on one of their SRs), «with_claim», «with_credit_note». One row, five columns. Count each CRF at most once per stage.', tables: ['crf', 'service_requests', 'pir', 'claims', 'credit_notes'], level: 3,
         solution: `SELECT COUNT(DISTINCT f.crf_id) AS crfs,
        COUNT(DISTINCT s.crf_id) AS with_sr,
