@@ -28,6 +28,25 @@ const theory = require(path.join(SRC, 'content', 'theory', 'syllabus.cjs'));
       if (!t) throw new Error(`${f}: topic ${id} is not in the syllabus`);
       if (t.md) throw new Error(`${f}: topic ${id} written twice`);
       Object.assign(t, body);
+    }
+  }
+  // senior-depth addenda: theory/deep/*.cjs export { topicId: { md, check, scenarios, interview, hands } }
+  // md is appended under the topic's own text; card lists are concatenated.
+  const deepDir = path.join(dir, 'deep');
+  let deepN = 0;
+  if (fs.existsSync(deepDir)) for (const f of fs.readdirSync(deepDir).filter(f => f.endsWith('.cjs')).sort()) {
+    for (const [id, body] of Object.entries(require(path.join(deepDir, f)))) {
+      const t = byId.get(id);
+      if (!t) throw new Error(`deep/${f}: topic ${id} is not in the syllabus`);
+      if (!t.md) throw new Error(`deep/${f}: topic ${id} has no base text to extend`);
+      if (body.md) { t.md += '\n\n' + body.md; deepN++; }
+      for (const k of ['check', 'scenarios', 'interview', 'hands']) if (body[k]) t[k] = (t[k] || []).concat(body[k]);
+    }
+  }
+  console.log(`theory: ${deepN} topics extended with senior-depth addenda`);
+  for (const t of byId.values()) {
+    const id = t.id;
+    {
       for (const k of ['check', 'scenarios', 'interview', 'hands']) for (const c of t[k] || []) {
         const need = { mcq: ['q', 'opts', 'a'], multi: ['q', 'opts', 'a'], tf: ['q'], sql: ['q', 'solution'], py: ['q', 'tests', 'solution'], spark: ['q', 'solution'], scenario: ['setup', 'steps'], talk: ['q', 'a'], order: ['q', 'items'], match: ['q', 'pairs'], fill: ['q', 'a'], bug: ['q', 'code', 'a'] }[c.t];
         if (!need) throw new Error(`theory ${id}: bad card type ${c.t}`);

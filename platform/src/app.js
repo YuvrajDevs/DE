@@ -1319,7 +1319,7 @@ const AREAS = [
   ['project', 'Your projects'], ['behavioural', 'Behavioural and competencies'],
 ];
 const AREA_NAME = Object.fromEntries(AREAS);
-const SECTION_AREA = { foundations: 'foundations', databases: 'databases', modelling: 'modelling', pipelineeng: 'pipelines', distributed: 'distributed', kafka: 'kafka', spark: 'spark', hadoop: 'hadoop', cloud: 'cloud', governance: 'governance', aiiot: 'aiiot', swe: 'swe' };
+const SECTION_AREA = { sqlx: 'sql', pyde: 'python', foundations: 'foundations', databases: 'databases', modelling: 'modelling', pipelineeng: 'pipelines', distributed: 'distributed', kafka: 'kafka', spark: 'spark', hadoop: 'hadoop', cloud: 'cloud', governance: 'governance', aiiot: 'aiiot', swe: 'swe' };
 const MODULE_AREA = { basics: 'foundations', devops: 'swe', sql: 'sql', python: 'python', spark: 'spark', streaming: 'kafka', pipelines: 'pipelines', orchestration: 'pipelines', modelling: 'modelling', quality: 'quality', bigdata: 'hadoop', cloud: 'cloud', governance: 'governance', ai: 'aiiot', scale: 'distributed', project: 'project', interview: 'behavioural' };
 const WORLD_AREA = { orient: 'foundations', tools: 'foundations', sql1: 'sql', sql2: 'sql', python: 'python', model: 'modelling', pipes: 'pipelines', quality: 'quality', spark: 'spark', bigdata: 'hadoop', stream: 'kafka', scale: 'distributed', cloud: 'cloud', design: 'distributed', ai: 'aiiot', interview: 'behavioural', turbofan: 'project', beyond: 'pipelines' };
 const PRACTICE_AREA = { sql: 'sql', python: 'python', pyspark: 'spark', spark: 'spark', scale: 'distributed', interview: 'behavioural' };
