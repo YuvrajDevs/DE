@@ -677,3 +677,10 @@ h1, h2, h3 { letter-spacing: -0.01em; }
   .theory .theory-h { font-size: 23px; }
 }
 .lib-pane .viz { overflow-x: auto; max-width: 100%; }
+.lib-pane, .lib-pane > *, .theory, .theory-md { min-width: 0; max-width: 100%; }
+.theory-md pre, .theory-md .tbl-wrap { overflow-x: auto; max-width: 100%; }
+.theory-md code { overflow-wrap: anywhere; }
+.theory-md pre code { overflow-wrap: normal; }
+.opt { max-width: 100%; min-width: 0; }
+.opt > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.theory-q, .theory-q .card { min-width: 0; max-width: 100%; }

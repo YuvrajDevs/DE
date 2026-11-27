@@ -4,7 +4,7 @@
 const S = (id, n, title, blurb, topics) => ({ id, n, title, blurb, topics: topics.map(([tid, t]) => ({ id: tid, title: t })) });
 
 module.exports = {
-  intro: 'Concepts only, no tools yet. Each topic answers the same questions: what it is, why it exists, how it works, when you choose it, what the alternatives are, the trade-offs, and where it sits in a real company pipeline. Then you check yourself, practise on real situations and do one hands-on task. Nothing is locked: open any topic, any tab, in any order.',
+  intro: 'Every concept and tool in the Data Engineer 1 posting, from first principles to senior-level depth, in plain words. Each topic answers the same questions: what it is, why it exists, how it works, when you choose it, what the alternatives are, the trade-offs, and where it sits in a real company pipeline. Then you check yourself, practise on real situations and do one hands-on task. Nothing is locked: open any topic, any tab, in any order.',
   six: ['What is it?', 'Why does it exist? What problem does it solve?', 'How does it work inside?', 'When do you choose it, and when not?', 'What are the alternatives, and why pick this one?', 'Where does it sit in a real company pipeline?'],
   sections: [
     S('foundations', 1, 'Data engineering foundations', 'The mental model everything else hangs on: what the job is, what kinds of data exist, how data moves from the systems that run a business to the people who analyse it.', [
