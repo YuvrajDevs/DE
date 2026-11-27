@@ -120,7 +120,7 @@ function indexContent() {
     c._id = `th:${t.id}:${k}:${i}`;
     c._lesson = 'theory:' + t.id;
     c._topic = t.id;
-    c._area = SECTION_AREA[sec.id] || 'foundations';
+    c._area = c.area || (c.t === 'talk' && c.tag === 'hr' ? 'behavioural' : SECTION_AREA[sec.id] || 'foundations');
     c._theory = t.id;
     c._bank = true;
     ITEMS[c._id] = c;
