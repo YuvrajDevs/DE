@@ -23,7 +23,7 @@ module.exports = {
     ## Copies
     - «list(x)», «x[:]», «x.copy()», «dict(d)» are **shallow**: the outer container is new, the inner objects are shared. Copying a list of dict rows and then editing a row edits the original.
     - «copy.deepcopy» copies recursively: correct but slow on large structures. In pipelines prefer building **new** rows («{**row, 'status': 'x'}») over mutating in place.
-    - pandas: «df2 = df» aliases; «df[df.x > 0]['y'] = 1» may modify a temporary copy (SettingWithCopyWarning). Use «df.loc[mask, 'y'] = 1». pandas 3 makes copy-on-write the default, which removes most of this class of bug.
+    - pandas: «df2 = df» aliases; «df[df.x > 0]['y'] = 1» may modify a temporary copy (SettingWithCopyWarning). Use «df.loc[mask, 'y'] = 1». **pandas 3.0 (January 2026) makes copy-on-write the default and only mode**: chained assignment no longer modifies the original and every derived object behaves like a copy, which removes most of this class of bug (and breaks code that relied on chained assignment working).
 
     ## Equality, identity, hashing
     - «==» compares values; «is» compares identity. Use «is» only for «None» (and sentinels).
@@ -206,7 +206,7 @@ def spikes(readings, window, factor):
     | Aggregate 5 TB | Spark | Many machines |
     | Thousands of concurrent long-lived connections (websockets, Kafka-like clients) | asyncio | One thread, cheap coroutines |
 
-    Python 3.13 has an experimental **free-threaded** build (no GIL), and 3.12+ has per-interpreter GILs, but production data code in 2026 still assumes the GIL. Mention it to show you are current; do not design around it.
+    Python 3.13 introduced an experimental **free-threaded** build (no GIL); **Python 3.14 (October 2025) made it officially supported** (PEP 779) but still **optional**: a separate interpreter («python3.14t»), not the default, and many C-extension libraries are still catching up. Production data code and platforms (Databricks runtimes, Airflow images) still run the standard GIL build in 2026. Mention it to show you are current; do not design around it yet.
 
     ## Threads
     «««python

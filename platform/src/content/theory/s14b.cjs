@@ -29,6 +29,7 @@ module.exports = {
     - «groupby» drops NaN keys by default («dropna=False» to keep them).
     - «merge» defaults to an inner join and silently fans out on duplicate keys; use «validate='many_to_one'» to make it raise.
     - Integer columns with missing values become float (use nullable «Int64»).
+    - **pandas 3.0 changes** (January 2026): strings get a dedicated default «str» dtype (Arrow-backed when pyarrow is installed) instead of «object», so code that checks «dtype == object» to find text columns breaks; copy-on-write is the only mode. Upgrade via pandas 2.3 with the future flags on and no warnings.
     - Chained assignment (fixed by copy-on-write in pandas 3).
     - «to_datetime» guessing formats; time-zone-naive vs aware comparisons raise.
 
@@ -234,7 +235,7 @@ assert check_dedupe_properties(bad, inputs) == [(2, 'keeps_keys')], check_dedupe
     ## Environments and dependencies
     - Isolate per project: «venv» / «uv» / «poetry» / «conda». Never install into the system Python.
     - **Pin** for applications: a lock file («uv.lock», «poetry.lock», «requirements.txt» generated with hashes by pip-tools). Ranges («pandas>=2») in an app mean today's build differs from last month's.
-    - **Match the runtime:** on Databricks the cluster's runtime already has PySpark, pandas, pyarrow at specific versions; installing a different PySpark breaks things. Pin libraries to the runtime version (e.g. DBR 15.4 LTS → Spark 3.5, Python 3.11) and test against it.
+    - **Match the runtime:** on Databricks the cluster's runtime already has PySpark, pandas, pyarrow at specific versions; installing a different PySpark breaks things. Pin libraries to the runtime version (e.g. Databricks Runtime 18 → Spark 4.1, JDK 21 by default; older 15.4 LTS → Spark 3.5) and test against the same runtime in CI.
     - Dependency conflicts are a top cause of "job failed after cluster restart": a library resolved to a new version overnight.
 
     ## Project layout

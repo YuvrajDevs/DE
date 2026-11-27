@@ -180,7 +180,7 @@ module.exports = {
 
     ## The reference architecture
     «««flow
-    Sources (SAP/ERP, CRM, plant DBs, IoT, files) -> ADF / Event Hubs / IoT Hub -> ADLS Gen2 (bronze) -> Databricks (Spark, Delta Live Tables, Workflows) -> silver/gold Delta tables -> Databricks SQL / Power BI / ML / APIs
+    Sources (SAP/ERP, CRM, plant DBs, IoT, files) -> ADF / Event Hubs / IoT Hub -> ADLS Gen2 (bronze) -> Databricks (Spark, Lakeflow Declarative Pipelines (formerly Delta Live Tables), Lakeflow Jobs) -> silver/gold Delta tables -> Databricks SQL / Power BI / ML / APIs
     »»»
     Governed by Unity Catalog (+ Purview for enterprise-wide cataloguing), secured with Entra ID, private endpoints and Key Vault, monitored with Azure Monitor/Log Analytics.
 

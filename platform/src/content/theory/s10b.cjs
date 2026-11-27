@@ -74,7 +74,7 @@ def pseudonymise(rows, key, fields):
 
     ## The components
     1. **Rule library:** standard checks (not null, unique, accepted values, ranges, referential integrity, freshness, volume, distribution, custom SQL) parameterised per dataset.
-    2. **Rules as code:** YAML/SQL/Python next to the pipeline code, versioned and reviewed (dbt tests, Great Expectations suites, Soda checks, Delta Live Tables expectations, Databricks Lakehouse Monitoring).
+    2. **Rules as code:** YAML/SQL/Python next to the pipeline code, versioned and reviewed (dbt tests, Great Expectations suites, Soda checks, Lakeflow Declarative Pipelines (formerly DLT) expectations, Databricks Lakehouse Monitoring).
     3. **Execution points:** ingestion (validate), after transform (integrity), before publish (gate), continuous (monitors).
     4. **Actions per severity:** fail/block, quarantine rows, warn.
     5. **Results store:** every check run recorded (dataset, rule, passed, failing count, sample keys, run ID, time).
@@ -88,7 +88,7 @@ def pseudonymise(rows, key, fields):
     | **dbt tests** | YAML generic tests + SQL tests in the transformation project |
     | **Great Expectations** | Python "expectations" suites, data docs |
     | **Soda** | SodaCL YAML checks, monitoring |
-    | **Delta Live Tables expectations** | «EXPECT (claim_amount >= 0) ON VIOLATION DROP ROW / FAIL UPDATE» in pipeline definitions |
+    | **Lakeflow Declarative Pipelines (formerly DLT) expectations** | «EXPECT (claim_amount >= 0) ON VIOLATION DROP ROW / FAIL UPDATE» in pipeline definitions |
     | **Lakehouse Monitoring / Monte Carlo** | Profiling, drift and anomaly detection |
 
     ## Designing rules well

@@ -560,7 +560,7 @@ ORDER BY engine_id, ts`, hint: 'Explicit ROWS frame; LAG for the jump.' }),
     - **Anchor** + **recursive member** joined to the CTE itself; runs until the recursive member returns no rows.
     - Uses: org charts, bill of materials (engine → assemblies → parts, with quantities multiplied down the tree), dependency graphs (which tables are downstream of X: lineage), generating date series.
     - **Cycles** (A manages B manages A, or a BOM loop from bad data) cause infinite recursion. Guard with a depth limit, a path check («WHERE path NOT LIKE '%/' || id || '/%'»), or the SQL standard «CYCLE» clause (Postgres 14+).
-    - Spark SQL did not support recursive CTEs until recently (Spark 4 / Databricks Runtime 17 add them); the classic Spark answer is an **iterative loop of joins** in the driver until no new rows, or GraphFrames.
+    - Spark SQL supports recursive CTEs from **Spark 4.1** (Databricks Runtime 17+ added them first). On older Spark versions the classic answer is an **iterative loop of joins** driven from Python until no new rows appear, or GraphFrames. Always add a depth limit: Spark also caps recursion depth/rows by config.
 
     ## Choosing
     - Need a per-row comparison to a group statistic → a **window** («AVG(x) OVER (PARTITION BY k)») is usually clearer and faster than a correlated subquery.
