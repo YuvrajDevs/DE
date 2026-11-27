@@ -637,3 +637,43 @@ h1, h2, h3 { letter-spacing: -0.01em; }
 
 .panel h3 { margin: 0 0 12px; }
 .panel h3 + .lessons { margin-top: 0; }
+
+/* ---- browser (theory + tabs): every item one click away */
+.lib { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 18px; align-items: start; }
+.lib-side { position: sticky; top: 76px; max-height: calc(100vh - 96px); overflow: auto; padding: 12px; }
+.lib-all > summary { cursor: pointer; list-style: none; padding: 2px 4px 10px; display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.lib-all > summary::-webkit-details-marker { display: none; }
+.lib-q { margin-bottom: 8px; }
+.lib-g { border-top: 1px solid var(--line); }
+.lib-g > summary { cursor: pointer; display: flex; justify-content: space-between; gap: 8px; padding: 9px 6px; font-weight: 600; font-size: 14px; list-style: none; }
+.lib-g > summary::-webkit-details-marker { display: none; }
+.lib-g > summary::before { content: '▸'; color: var(--muted); margin-right: 4px; transition: transform .15s; display: inline-block; }
+.lib-g[open] > summary::before { transform: rotate(90deg); }
+.lib-g > summary > span:first-child { flex: 1; }
+.lib-n { color: var(--muted); font-weight: 500; font-size: 12px; white-space: nowrap; }
+.lib-g ol { list-style: none; margin: 0 0 8px; padding: 0; }
+.lib-g li a { display: flex; gap: 8px; align-items: flex-start; padding: 6px 8px; border-radius: 8px; color: var(--ink); text-decoration: none; font-size: 13px; line-height: 1.35; }
+.lib-g li a:hover { background: var(--bg); }
+.lib-g li.cur a { background: #e8efff; color: var(--accent); }
+.lib-g .s50-mark { margin-top: 1px; }
+.lib-t.soon { color: var(--muted); }
+.lib-blurb { margin-top: -6px; max-width: 820px; }
+.small { font-size: 13px; }
+.theory .theory-h { font-size: 28px; line-height: 1.2; margin: 4px 0 12px; }
+.theory-md h2 { font-size: 20px; margin: 28px 0 10px; padding-top: 14px; border-top: 1px solid var(--line); scroll-margin-top: 80px; }
+.theory-md h3 { font-size: 16px; margin: 18px 0 6px; }
+.theory-md p, .theory-md li { line-height: 1.65; }
+.theory-md blockquote { margin: 12px 0; padding: 10px 14px; border-left: 3px solid var(--accent); background: #f3f6ff; border-radius: 0 10px 10px 0; }
+.theory-md blockquote p { margin: 0; }
+.toc { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 6px; }
+.toc a { font-size: 12.5px; padding: 4px 10px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); color: var(--ink); text-decoration: none; }
+.toc a:hover { border-color: var(--accent); color: var(--accent); }
+.theory-sub { margin: 22px 0 8px; }
+.theory-next { margin: 14px 0 0; }
+@media (max-width: 900px) {
+  .lib { grid-template-columns: minmax(0, 1fr); }
+  .lib > * { min-width: 0; }
+  .lib-side { position: static; max-height: 60vh; }
+  .theory .theory-h { font-size: 23px; }
+}
+.lib-pane .viz { overflow-x: auto; max-width: 100%; }

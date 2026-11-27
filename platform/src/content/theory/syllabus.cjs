@@ -28,6 +28,7 @@ module.exports = {
       ['indexing', 'Indexing and why it matters'], ['normal', 'Normalisation vs denormalisation'],
       ['transactions', 'Transactions and ACID'], ['replication', 'Replication'], ['dbpartition', 'Partitioning'],
       ['scaling', 'Horizontal vs vertical scaling'], ['schema', 'Schema and schema evolution'],
+      ['fileformats', 'File formats: CSV, JSON, Avro, Parquet, ORC'], ['compression', 'Compression and encoding'],
     ]),
     S('modelling', 3, 'Data modelling', 'How to shape data so it is correct, easy to query and stays correct as the business changes.', [
       ['whatmodel', 'What is data modelling?'], ['cll', 'Conceptual, logical and physical models'], ['erd', 'Entity relationship diagrams'],
@@ -38,12 +39,13 @@ module.exports = {
       ['fullincr', 'Full load vs incremental load'], ['cdc', 'Change data capture'], ['idempotency', 'Idempotency'], ['dedupe', 'Deduplication'],
       ['recon', 'Reconciliation'], ['schemaval', 'Schema validation'], ['contracts', 'Data contracts'], ['dqdims', 'Data quality dimensions'],
       ['errors', 'Error handling'], ['retries', 'Retries'], ['dlq', 'Dead-letter queues'], ['deps', 'Pipeline dependencies'],
-      ['orch', 'Orchestration'], ['observ', 'Observability'], ['lineage', 'Lineage'], ['sla', 'Data SLAs'], ['reliab', 'Reliability and fault tolerance'],
+      ['orch', 'Orchestration'], ['airflow', 'Airflow in depth'], ['dbt', 'dbt and transformation in the warehouse'], ['backfill', 'Backfills and reprocessing'], ['late', 'Late-arriving and out-of-order data'], ['observ', 'Observability'], ['lineage', 'Lineage'], ['sla', 'Data SLAs'], ['reliab', 'Reliability and fault tolerance'],
     ]),
     S('distributed', 5, 'Distributed systems and big data', 'Why one computer is not enough, and the new problems you get when you use many.', [
       ['bigdata', 'What is big data? The 5 Vs'], ['distcomp', 'Distributed computing'], ['diststore', 'Distributed storage'], ['cluster', 'Cluster architecture: nodes, drivers, workers'],
       ['parallel', 'Parallel processing and partitioning'], ['shuffle', 'Shuffling'], ['skew', 'Data skew'], ['faulttol', 'Fault tolerance and replication'],
       ['tputlat', 'Throughput vs latency'], ['eventual', 'Eventual consistency'], ['cap', 'CAP theorem'], ['semantics', 'At-most-once, at-least-once, exactly-once'],
+      ['sizing', 'Back-of-envelope sizing'], ['sysdesign', 'Designing a data pipeline end to end'],
     ]),
     S('kafka', 6, 'Apache Kafka (concepts)', 'The log that sits in the middle of event-driven companies.', [
       ['kafkawhat', 'What Kafka is and event-driven architecture'], ['brokers', 'Brokers, topics and partitions'], ['prodcons', 'Producers, consumers and consumer groups'],
@@ -55,14 +57,15 @@ module.exports = {
       ['dag', 'DAG execution, jobs, stages, tasks'], ['narrowwide', 'Narrow vs wide transformations'], ['cache', 'Caching and persistence'],
       ['sparkft', 'Fault tolerance in Spark'], ['sparksql', 'Spark SQL and the optimiser'], ['sss', 'Structured Streaming'],
     ]),
-    S('hadoop', 8, 'Hadoop ecosystem', 'The first big-data platform. Mostly replaced, still asked, and its ideas live on everywhere.', [
+    S('hadoop', 8, 'Hadoop, NoSQL and the JVM', 'The first big-data platform and the NoSQL stores in the posting. Mostly replaced or specialised, still asked, and their ideas live on everywhere.', [
       ['hadoopwhat', 'What Hadoop is'], ['hdfs', 'HDFS: NameNode, DataNodes, blocks, replication'], ['mapreduce', 'MapReduce: mapper, shuffle, reducer'],
-      ['hive', 'Hive and the metastore'], ['hivepart', 'Hive partitions and buckets'], ['hbase', 'HBase'], ['hadoopspark', 'Hadoop vs Spark'],
+      ['hive', 'Hive and the metastore'], ['hivepart', 'Hive partitions and buckets'], ['hbase', 'HBase and Accumulo'], ['hadoopspark', 'Hadoop vs Spark'],
+      ['cassandra', 'Cassandra'], ['dynamodb', 'DynamoDB'], ['mongodb', 'MongoDB'], ['scalajava', 'Scala and Java for data engineers'],
     ]),
     S('cloud', 9, 'Cloud and storage architecture', 'Renting computers and storage by the minute, and what that changes about how data platforms are built.', [
       ['cloudwhat', 'What cloud computing is'], ['iaas', 'IaaS vs PaaS vs SaaS'], ['cloudtypes', 'Public, private and hybrid cloud'], ['objstore', 'Object storage'],
-      ['lakearch', 'Data lake architecture'], ['clouddw', 'Cloud data warehouses'], ['clusters', 'Cloud clusters, scalability and elasticity'],
-      ['cloudsec', 'Cloud security fundamentals'], ['clouds', 'Azure vs AWS vs GCP'],
+      ['lakearch', 'Data lake architecture'], ['tableformats', 'Open table formats: Delta, Iceberg, Hudi'], ['filemove', 'Moving large files to the cloud'], ['clouddw', 'Cloud data warehouses'], ['clusters', 'Cloud clusters, scalability and elasticity'],
+      ['cloudsec', 'Cloud security fundamentals'], ['clouds', 'Azure vs AWS vs GCP'], ['azure', 'The Azure data stack and Databricks'], ['cost', 'Cloud cost'],
     ]),
     S('governance', 10, 'Governance and data products', 'Making data findable, trusted, safe and reusable across a whole company.', [
       ['govwhat', 'What data governance is'], ['metadata', 'Metadata: technical vs business'], ['catalog', 'Data catalogues and discoverability'],
@@ -77,7 +80,7 @@ module.exports = {
     S('swe', 12, 'Software engineering and delivery', 'How data work is planned, built, tested, shipped and supported in a team.', [
       ['sdlc', 'SDLC'], ['agile', 'Agile, Scrum and Kanban'], ['devops', 'DevOps and CI/CD'], ['git', 'Version control'],
       ['testing', 'Unit, integration and regression testing'], ['rca', 'Root cause analysis'], ['monitoring', 'Monitoring and alerting'],
-      ['docs', 'Documentation, requirements and acceptance criteria'],
+      ['requirements', 'Requirements engineering: acceptance criteria, traceability, change impact'], ['docs', 'Solution documentation and validation testing'], ['qametrics', 'Quality assurance metrics and KPIs'],
     ]),
   ],
 };

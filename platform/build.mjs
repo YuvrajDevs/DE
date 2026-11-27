@@ -18,6 +18,27 @@ const practice = require(path.join(SRC, 'content', 'practice.cjs'));
 const posting = require(path.join(SRC, 'content', 'posting.cjs'));
 const sql50 = require(path.join(SRC, 'content', 'sql50.cjs'));
 const modules = require(path.join(SRC, 'content', 'modules.cjs'));
+const theory = require(path.join(SRC, 'content', 'theory', 'syllabus.cjs'));
+{ // theory content: src/content/theory/s*.cjs export { topicId: { md, check, scenarios, interview, hands } }
+  const dir = path.join(SRC, 'content', 'theory');
+  const byId = new Map(theory.sections.flatMap(sec => sec.topics.map(t => [t.id, t])));
+  for (const f of fs.readdirSync(dir).filter(f => /^s\d.*\.cjs$/.test(f)).sort()) {
+    for (const [id, body] of Object.entries(require(path.join(dir, f)))) {
+      const t = byId.get(id);
+      if (!t) throw new Error(`${f}: topic ${id} is not in the syllabus`);
+      if (t.md) throw new Error(`${f}: topic ${id} written twice`);
+      Object.assign(t, body);
+      for (const k of ['check', 'scenarios', 'interview', 'hands']) for (const c of t[k] || []) {
+        const need = { mcq: ['q', 'opts', 'a'], multi: ['q', 'opts', 'a'], tf: ['q'], sql: ['q', 'solution'], py: ['q', 'tests', 'solution'], spark: ['q', 'solution'], scenario: ['setup', 'steps'], talk: ['q', 'a'], order: ['q', 'items'], match: ['q', 'pairs'], fill: ['q', 'a'], bug: ['q', 'code', 'a'] }[c.t];
+        if (!need) throw new Error(`theory ${id}: bad card type ${c.t}`);
+        for (const n of need) if (c[n] === undefined) throw new Error(`theory ${id}: ${c.t} card missing ${n}`);
+        if (c.t === 'mcq' && (c.a < 0 || c.a >= c.opts.length)) throw new Error(`theory ${id}: mcq answer out of range: ${c.q}`);
+      }
+    }
+  }
+  const written = [...byId.values()].filter(t => t.md).length;
+  console.log(`theory: ${written}/${byId.size} topics written`);
+}
 { // practice banks: src/content/bank/*.cjs export { moduleId: [cards] }
   const dir = path.join(SRC, 'content', 'bank');
   const banks = fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => f.endsWith('.cjs')).sort().map(f => require(path.join(dir, f))) : [];
@@ -50,7 +71,7 @@ for (const w of worlds) for (const l of w.lessons) {
 for (const set of practice) for (const c of set.cards) { cards++; types[c.t] = (types[c.t] || 0) + 1; }
 for (const sec of posting) for (const it of sec.items) for (const id of it.lessons) if (!ids.has(id)) throw new Error('posting: unknown lesson ' + id);
 for (const d of plan) for (const it of d.items) if (it.lesson && !ids.has(it.lesson)) throw new Error(`plan day ${d.day}: unknown lesson ${it.lesson}`);
-fs.writeFileSync(path.join(DIST, 'content.json'), JSON.stringify({ worlds, plan, glossary, projects, practice, posting, sql50, modules }));
+fs.writeFileSync(path.join(DIST, 'content.json'), JSON.stringify({ worlds, plan, glossary, projects, practice, posting, sql50, modules, theory }));
 
 // ---- syntax-check every inlined script
 import vm from 'node:vm';

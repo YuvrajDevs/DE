@@ -115,6 +115,16 @@ function indexContent() {
     c._bank = true;
     if (GRADABLE.has(c.t)) ITEMS[c._id] = c;
   }));
+  C.worlds.forEach(w => w.lessons.forEach(l => l.cards.forEach(c => { if (c.t === 'viz') VIZ_ITEMS[c._id] = c; })));
+  ((C.theory && C.theory.sections) || []).forEach(sec => sec.topics.forEach(t => ['check', 'scenarios', 'interview', 'hands'].forEach(k => (t[k] || []).forEach((c, i) => {
+    c._id = `th:${t.id}:${k}:${i}`;
+    c._lesson = 'theory:' + t.id;
+    c._topic = t.id;
+    c._area = SECTION_AREA[sec.id] || 'foundations';
+    c._theory = t.id;
+    c._bank = true;
+    ITEMS[c._id] = c;
+  }))));
   (C.practice || []).forEach(set => set.cards.forEach((c, ci) => {
     c._id = `${set.id}:${ci}`;
     c._lesson = set.id;
@@ -327,7 +337,7 @@ function render() {
   const view = routes[name] ? name : 'home';
   if (current && current.cleanup) current.cleanup();
   current = null;
-  const section = { map: 'modules', module: 'modules', mpractice: 'modules', lesson: 'modules', world: 'modules', review: 'practice', sql50: 'practice', speed: 'practice', interview: 'practice', arena: 'practice', projects: 'more', posting: 'more', glossary: 'more', settings: 'more' }[view] || view;
+  const section = { map: 'more', module: 'more', modules: 'more', mpractice: 'more', lesson: 'more', world: 'more', plan: 'more', review: 'practice', speed: 'practice', sql50: 'handson', arena: 'handson', mock: 'interview', projects: 'more', posting: 'more', glossary: 'more', settings: 'more' }[view] || view;
   $$('.nav a, .tabbar a, .rail a[data-r]').forEach(a => a.setAttribute('aria-current', a.dataset.r === section ? 'page' : 'false'));
   const main = $('main');
   main.replaceChildren();
@@ -347,37 +357,31 @@ function missionDone(item) {
   return false;
 }
 routes.home = (main) => {
-  const r = rankOf(S.xp);
-  const nl = nextLesson();
-  const day = Math.min(planDay(), C.plan.length);
-  const m = missionFor(day);
+  S.theory = S.theory || {};
+  const topics = theoryTopics(), written = topics.filter(t => t.md);
+  const read = written.filter(t => S.theory[t.id]).length, mastered = written.filter(t => S.theory[t.id] === 'done').length;
+  const nextT = (S.theoryLast && written.find(t => t.id === S.theoryLast && S.theory[t.id] !== 'done')) || written.find(t => S.theory[t.id] !== 'done');
+  const tabStat = tab => { const items = tabGroups(tab).flatMap(g => g.items); return [items.length, items.filter(c => markOf(c) === 'ok').length]; };
   const due = dueItems().length;
-  const totalLessons = C.worlds.reduce((a, w) => a + w.lessons.length, 0);
-  const doneLessons = Object.keys(S.lessons).filter(k => IDX[k]).length;
+  const tile = (href, ic, tint, title, sub, done, total) => h('a', { class: 'tile', href },
+    h('span', { class: 'tile-ic ' + tint, html: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ic}</svg>` }),
+    h('b', null, title), h('span', { class: 'tile-meta' }, sub),
+    h('span', { class: 'tile-bar', title: `${done} of ${total}` }, h('i', { style: { width: (total ? Math.round(100 * done / total) : 0) + '%' } })));
+  const [pN, pD] = tabStat('practice'), [hN, hD] = tabStat('handson'), [sN, sD] = tabStat('scenarios'), [iN, iD] = tabStat('interview');
   main.append(
-    h('section', { class: 'hero' },
-      h('div', null,
-        h('div', { class: 'eyebrow' }, `Your level: ${r.i + 1} of ${RANKS.length}`),
-        h('h1', null, r.name),
-        h('div', { class: 'rankline' },
-          h('div', { class: 'meter', role: 'progressbar', 'aria-valuenow': Math.round(r.pct), 'aria-label': 'Progress to next level' }, h('i', { style: { width: r.pct + '%' } })),
-          h('span', { class: 'muted tabnum', style: { fontSize: '13px' } }, `${doneLessons} of ${totalLessons} lessons done`))),
-      h('div', { class: 'row', style: { justifyContent: 'flex-end' } },
-        nl ? h('a', { class: 'btn primary big', href: `#lesson-${nl.id}` }, 'Continue: ', nl.title) : h('a', { class: 'btn primary big', href: '#interview' }, 'Do a mock interview'))),
-    h('section', { class: 'panel', style: { marginTop: '16px' } },
-      h('div', { class: 'row' }, h('h2', { style: { margin: 0 } }, `Today (day ${day} of ${C.plan.length})`), h('span', { class: 'spacer' }), h('a', { href: '#plan', class: 'btn small ghost' }, 'See all days')),
-      m ? h('p', { class: 'muted', style: { margin: '6px 0 12px' } }, m.focus) : null,
-      m ? h('div', { class: 'mission' }, m.items.map(it => {
-        const done = missionDone(it);
-        const L = it.lesson && IDX[it.lesson];
-        return h('a', { class: 'mission-item' + (done ? ' done' : ''), href: it.lesson ? `#lesson-${it.lesson}` : it.href },
-          h('span', { class: 'tick' }, done ? '✓' : ''),
-          h('span', null, h('span', { class: 't' }, L ? L.lesson.title : it.title), h('small', null, L ? `about ${L.lesson.mins || 15} min` : it.note || '')));
-      })) : h('p', null, 'You finished the plan. Keep going with review and mock interviews.')),
-    h('div', { class: 'big-actions' },
-      h('a', { href: '#review' }, h('b', null, 'Review'), h('span', null, due ? `${due} question(s) you missed are due` : 'Nothing to review today')),
-      h('a', { href: '#practice' }, h('b', null, 'Practice'), h('span', null, 'SQL, Python, PySpark, problems, quizzes')),
-      h('a', { href: '#interview' }, h('b', null, 'Mock interview'), h('span', null, 'A timed practice interview'))),
+    h('section', { class: 'mods-hero' },
+      h('h1', null, 'Stronger than the DE 1 bar ', h('span', { class: 'spark', 'aria-hidden': 'true' }, '✦')),
+      h('p', null, 'Five places, one job each. Theory builds the concepts. Practice tests them. Hands-on makes you do the work. Scenarios make you decide under pressure. Interview makes you say it out loud. Everything is open: go anywhere, in any order.'),
+      h('div', { class: 'row', style: { flexWrap: 'wrap', gap: '8px' } },
+        nextT ? h('a', { class: 'btn primary', href: `#theory-${nextT.id}` }, 'Continue theory: ', nextT.title) : null,
+        due ? h('a', { class: 'btn', href: '#review' }, `Review ${due} missed`) : null)),
+    h('div', { class: 'tiles' },
+      tile('#theory', '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M8 7h8M8 11h6"/>', 't-blue', 'Theory', `${written.length} topics · ${read} read · ${mastered} mastered`, mastered, written.length),
+      tile('#practice', '<path d="M6 4v16M18 4v16M3 8v8M21 8v8M6 12h12"/>', 't-green', 'Practice', `${pN} questions · ${pD} right`, pD, pN),
+      tile('#handson', '<path d="M8 9l-4 3 4 3M16 9l4 3-4 3M13.5 6l-3 12"/>', 't-orange', 'Hands-on', `${hN} tasks · ${hD} solved`, hD, hN),
+      tile('#scenarios', '<path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17v.5"/>', 't-violet', 'Scenarios', `${sN} situations · ${sD} clean`, sD, sN),
+      tile('#interview', '<path d="M4 5h16v10H9l-5 4z"/>', 't-pink', 'Interview', `${iN} questions · ${iD} nailed`, iD, iN),
+      tile('#more', '<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>', 't-slate', 'More', 'Projects, job posting checklist, glossary, settings', 0, 0)),
   );
 };
 
@@ -1068,7 +1072,7 @@ routes.speed = (main) => {
       h('div', { class: 'row', style: { justifyContent: 'center' } }, h('a', { class: 'btn', href: '#home' }, 'Home'), h('button', { class: 'btn primary', onclick: render }, 'Again'))));
   } });
 };
-routes.interview = (main, arg) => {
+routes.mock = (main, arg) => {
   if (!arg) {
     const past = S.mocks.slice(-5).reverse();
     main.append(h('div', { class: 'section-head', style: { marginTop: 0 } }, h('div', null, h('div', { class: 'eyebrow' }, 'Data Engineer 1 · Pune'), h('h2', null, 'Mock interview'))),
@@ -1079,7 +1083,7 @@ routes.interview = (main, arg) => {
              ['design', 'Design + scenarios · 30 min', '3 system design talk-throughs, 3 incident scenarios, 4 concept questions.'],
              ['hr', 'Managerial + behavioural · 20 min', 'Your story, competencies from the job posting, Cummins-specific questions.'],
              ['full', 'Full loop · 60 min', 'Everything above, compressed.']].map(([k, t, d]) =>
-              h('a', { class: 'mission-item', href: `#interview-${k}` }, h('span', { class: 'tick' }, '◎'), h('span', null, h('span', { class: 't' }, t), h('small', null, d)))))),
+              h('a', { class: 'mission-item', href: `#mock-${k}` }, h('span', { class: 'tick' }, '◎'), h('span', null, h('span', { class: 't' }, t), h('small', null, d)))))),
         h('section', { class: 'panel' }, h('h2', null, 'History'),
           past.length ? h('div', { class: 'mission' }, past.map(m => h('div', { class: 'mission-item' }, h('span', { class: 'tick' }, m.pct >= 70 ? '✓' : '·'), h('span', null, h('span', { class: 't' }, `${m.kind} · ${m.pct}%`), h('small', null, m.date))))) : h('p', { class: 'muted' }, 'No mock rounds yet. Hints are hidden and the clock runs. Aim for 70%+.'))));
     return;
@@ -1095,13 +1099,13 @@ routes.interview = (main, arg) => {
   };
   const limits = { technical: 35 * 60, design: 30 * 60, hr: 20 * 60, full: 60 * 60 };
   const cards = (sets[arg] || sets.technical)().map(c => ({ ...c, hint: null }));
-  return Player(main, cards, { title: `Mock interview · ${arg}`, mode: 'interview', timeLimit: limits[arg] || 1800, exitHref: '#interview', onDone: (s, stage) => {
+  return Player(main, cards, { title: `Mock interview · ${arg}`, mode: 'interview', timeLimit: limits[arg] || 1800, exitHref: '#mock', onDone: (s, stage) => {
     const pct = Math.round(s.acc * 100);
     S.mocks.push({ kind: arg, pct, date: todayStr() }); save();
     stage.replaceChildren(h('div', { class: 'card done-screen' }, h('div', { class: 'eyebrow' }, 'Mock interview'), h('h2', null, `${pct}%`),
       h('p', { class: 'muted' }, pct >= 80 ? 'Strong round. Keep it sharp with reviews.' : pct >= 60 ? 'Close. Missed items are now in your review queue.' : 'Keep drilling. Every miss is queued for review.'),
       h('div', { class: 'kv' }, h('div', null, h('b', null, `${s.correctFirst}/${s.answered}`), h('span', null, 'correct')), h('div', null, h('b', null, `${Math.floor(s.secs / 60)}m`), h('span', null, 'time')), h('div', null, h('b', null, `+${s.xp}`), h('span', null, 'XP'))),
-      h('div', { class: 'row', style: { justifyContent: 'center' } }, h('a', { class: 'btn', href: '#interview' }, 'Rounds'), h('a', { class: 'btn primary', href: '#review' }, 'Review misses'))));
+      h('div', { class: 'row', style: { justifyContent: 'center' } }, h('a', { class: 'btn', href: '#mock' }, 'Rounds'), h('a', { class: 'btn primary', href: '#review' }, 'Review misses'))));
   } });
 };
 
@@ -1243,6 +1247,8 @@ routes.more = (main) => {
   main.append(h('div', { class: 'section-head', style: { marginTop: 0 } }, h('h2', null, 'More')),
     h('div', { class: 'big-actions' },
       h('a', { href: '#projects' }, h('b', null, 'Resume projects'), h('span', null, 'Two projects to build, step by step')),
+      h('a', { href: '#mock' }, h('b', null, 'Mock interview'), h('span', null, 'Timed rounds: technical, design, behavioural')),
+      h('a', { href: '#review' }, h('b', null, 'Review'), h('span', null, 'Questions you missed, spaced out over days')),
       h('a', { href: '#posting' }, h('b', null, 'Job posting checklist'), h('span', null, 'Every line of the Cummins posting and where you learn it')),
       h('a', { href: '#glossary' }, h('b', null, 'Word list'), h('span', null, 'Plain-English meaning of every term')),
       h('a', { href: '#arena' }, h('b', null, 'Free coding space'), h('span', null, 'Try any SQL, Python or PySpark')),
@@ -1303,9 +1309,195 @@ routes.projects = (main) => {
   })));
 };
 
+
+// ------------------------------------------------------------------ areas: one list used by every tab
+const AREAS = [
+  ['foundations', 'Foundations'], ['databases', 'Databases'], ['sql', 'SQL'], ['python', 'Python'], ['modelling', 'Data modelling'],
+  ['pipelines', 'Pipelines and orchestration'], ['quality', 'Data quality and testing'], ['distributed', 'Distributed systems and scale'],
+  ['spark', 'Spark'], ['kafka', 'Kafka and streaming'], ['hadoop', 'Hadoop, NoSQL and the JVM'], ['cloud', 'Cloud'],
+  ['governance', 'Governance and data products'], ['aiiot', 'AI, ML and IoT'], ['swe', 'DevOps, Agile and delivery'],
+  ['project', 'Your projects'], ['behavioural', 'Behavioural and competencies'],
+];
+const AREA_NAME = Object.fromEntries(AREAS);
+const SECTION_AREA = { foundations: 'foundations', databases: 'databases', modelling: 'modelling', pipelineeng: 'pipelines', distributed: 'distributed', kafka: 'kafka', spark: 'spark', hadoop: 'hadoop', cloud: 'cloud', governance: 'governance', aiiot: 'aiiot', swe: 'swe' };
+const MODULE_AREA = { basics: 'foundations', devops: 'swe', sql: 'sql', python: 'python', spark: 'spark', streaming: 'kafka', pipelines: 'pipelines', orchestration: 'pipelines', modelling: 'modelling', quality: 'quality', bigdata: 'hadoop', cloud: 'cloud', governance: 'governance', ai: 'aiiot', scale: 'distributed', project: 'project', interview: 'behavioural' };
+const WORLD_AREA = { orient: 'foundations', tools: 'foundations', sql1: 'sql', sql2: 'sql', python: 'python', model: 'modelling', pipes: 'pipelines', quality: 'quality', spark: 'spark', bigdata: 'hadoop', stream: 'kafka', scale: 'distributed', cloud: 'cloud', design: 'distributed', ai: 'aiiot', interview: 'behavioural', turbofan: 'project', beyond: 'pipelines' };
+const PRACTICE_AREA = { sql: 'sql', python: 'python', pyspark: 'spark', spark: 'spark', scale: 'distributed', interview: 'behavioural' };
+const QUIZ = new Set(['mcq', 'tf', 'multi', 'fill', 'order', 'match', 'bug']);
+const CODE = new Set(['sql', 'py', 'spark', 'viz']);
+const TABS = {
+  practice: { title: 'Practice', blurb: 'Concept questions on every area: pick one, many, true or false, put in order, match, and find the bug. Every answer explains why.', test: c => QUIZ.has(c.t) },
+  handson: { title: 'Hands-on', blurb: 'Real code that runs in your browser and is checked automatically: SQL, Python and PySpark, from basic to the problems experienced engineers solve, plus simulations.', test: c => CODE.has(c.t) },
+  scenarios: { title: 'Scenarios', blurb: 'Something broke, or a design decision is due. Work through it step by step; wrong moves explain what they would have caused.', test: c => c.t === 'scenario' },
+  interview: { title: 'Interview', blurb: 'The hardest questions a DE 1 loop can ask. Answer out loud first, then compare with a model answer and grade yourself honestly.', test: c => c.t === 'talk' },
+};
+function areaOf(c) {
+  if (c._area) return c._area;
+  if (c.t === 'talk' && c.tag === 'hr') return 'behavioural';
+  if (c._lesson && c._lesson.startsWith('bank:')) return MODULE_AREA[c._lesson.slice(5)] || 'foundations';
+  if (c._lesson === 'sql50') return 'sql';
+  const L = IDX[c._lesson];
+  if (L) {
+    const m = (C.modules || []).find(x => x.lessons.includes(c._lesson));
+    if (m && MODULE_AREA[m.id]) return MODULE_AREA[m.id];
+    return WORLD_AREA[L.world.id] || 'foundations';
+  }
+  return PRACTICE_AREA[c._topic] || MODULE_AREA[c._topic] || WORLD_AREA[c._topic] || (c.t === 'sql' ? 'sql' : c.t === 'py' ? 'python' : c.t === 'spark' ? 'spark' : 'foundations');
+}
+const LEVEL_OF = c => c.t === 'viz' ? 9 : c.level || 1;
+function tabGroups(tab) {
+  const test = TABS[tab].test, by = {};
+  const seen = new Set();
+  for (const c of Object.values(ITEMS).concat(Object.values(VIZ_ITEMS))) {
+    if (!test(c) || seen.has(c._id)) continue;
+    seen.add(c._id);
+    (by[areaOf(c)] = by[areaOf(c)] || []).push(c);
+  }
+  return AREAS.filter(([id]) => by[id] && by[id].length).map(([id, title]) => ({ id, title, items: tab === 'handson' ? by[id].sort((a, b) => LEVEL_OF(a) - LEVEL_OF(b)) : by[id] }));
+}
+const VIZ_ITEMS = {};
+const plain = s => String(s || '').replace(/```[\s\S]*?```/g, ' ').replace(/[*_`#>|]/g, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/\s+/g, ' ').trim();
+const cardLabel = c => { const t = plain(c.title || c.q || c.setup || c.kind); return t.length > 78 ? t.slice(0, 76) + '…' : t; };
+const markOf = c => { const it = S.items[c._id]; return !it ? '' : it.b > 0 ? 'ok' : 'tried'; };
+const MARK_ICON = { ok: '✓', tried: '•', seen: '✓', '': '' };
+
+// A two-pane browser: every group and item is one click away, nothing is locked.
+function Browser(main, { tab, eyebrow, title, blurb, groups, cur, hrefOf, renderPane, top, markFn, labelFn }) {
+  const flat = groups.flatMap(g => g.items.map((it, i) => ({ g, it, i })));
+  const pos = Math.max(0, flat.findIndex(x => x.g.id === cur.g && x.i === cur.i));
+  const here = flat[pos];
+  const q = h('input', { type: 'search', class: 'input lib-q', placeholder: `Filter ${title.toLowerCase()}…`, 'aria-label': 'Filter the list', autocomplete: 'off' });
+  const list = h('div', { class: 'lib-list' });
+  const draw = () => {
+    const s = norm(q.value);
+    list.replaceChildren(...groups.map(g => {
+      const items = g.items.map((it, i) => ({ it, i })).filter(({ it }) => !s || norm(labelFn(it) + ' ' + plain(it.md || it.q || it.setup || '')).includes(s));
+      if (s && !items.length) return null;
+      const done = g.items.filter(it => ['ok', 'seen'].includes(markFn(it))).length;
+      return h('details', { class: 'lib-g', open: s || g.id === here.g.id ? true : null },
+        h('summary', null, h('span', null, g.title), h('span', { class: 'lib-n' }, `${done}/${g.items.length}`)),
+        h('ol', null, items.map(({ it, i }) => {
+          const m = markFn(it), on = g.id === here.g.id && i === here.i;
+          return h('li', { class: on ? 'cur' : null }, h('a', { href: hrefOf(g.id, i), 'aria-current': on ? 'page' : null },
+            h('span', { class: 's50-mark ' + m, 'aria-hidden': 'true' }, MARK_ICON[m]), h('span', { class: 'lib-t' + (it._soon ? ' soon' : '') }, labelFn(it))));
+        })));
+    }));
+  };
+  q.addEventListener('input', draw);
+  const prev = flat[pos - 1], next = flat[pos + 1];
+  const nav = h('div', { class: 's50-nav' },
+    prev ? h('a', { class: 'btn', href: hrefOf(prev.g.id, prev.i) }, '← Previous') : h('span'),
+    h('span', { class: 'muted small' }, `${pos + 1} of ${flat.length}`),
+    next ? h('a', { class: 'btn primary', href: hrefOf(next.g.id, next.i) }, 'Next →') : h('span'));
+  const pane = h('div', { class: 'lib-pane' });
+  const redraw = () => draw();
+  renderPane(pane, here, { redraw, nextHref: next ? hrefOf(next.g.id, next.i) : null });
+  draw();
+  main.append(
+    h('div', { class: 'section-head', style: { marginTop: 0 } }, h('div', null, h('div', { class: 'eyebrow' }, eyebrow), h('h2', null, title))),
+    blurb ? h('p', { class: 'muted lib-blurb' }, blurb) : null, top || null,
+    h('div', { class: 'lib' },
+      h('aside', { class: 'lib-side panel' }, h('details', { class: 'lib-all', open: window.innerWidth > 900 ? true : null }, h('summary', null, h('b', null, 'All ' + title.toLowerCase()), h('span', { class: 'muted small' }, ' tap to jump anywhere')), q, list)),
+      h('div', { style: { minWidth: 0 } }, pane, nav)));
+  const c = $('.lib-list li.cur'); if (c && window.innerWidth > 900) c.scrollIntoView({ block: 'nearest' });
+}
+const parseArg = (arg) => { const m = /^(.*?)(?:-(\d+))?$/.exec(arg || ''); return { g: m[1] || null, i: m[2] ? +m[2] : 0 }; };
+
+function tabView(tab) {
+  return (main, arg) => {
+    const groups = tabGroups(tab);
+    if (!groups.length) { main.append(h('p', null, 'Nothing here yet.')); return; }
+    const cur = parseArg(arg);
+    if (!groups.some(g => g.id === cur.g)) { cur.g = groups[0].id; cur.i = 0; }
+    const T = TABS[tab];
+    const total = groups.reduce((a, g) => a + g.items.length, 0);
+    const top = tab === 'handson' ? h('div', { class: 'big-actions', style: { marginBottom: '14px' } },
+        h('a', { href: '#sql50', class: 'feature' }, h('b', null, 'SQL in 50'), h('span', null, 'Zero to interview level: 25 concepts, 50 queries, any order')),
+        h('a', { href: '#arena' }, h('b', null, 'Free coding space'), h('span', null, 'Try any SQL, Python or PySpark on the practice data')),
+        h('a', { href: '#projects' }, h('b', null, 'Project builds'), h('span', null, 'Turbofan and NHTSA, step by step')))
+      : tab === 'interview' ? h('div', { class: 'big-actions', style: { marginBottom: '14px' } },
+        h('a', { href: '#mock', class: 'feature' }, h('b', null, 'Timed mock interview'), h('span', null, 'Technical, design, behavioural or a full loop')),
+        h('a', { href: '#review' }, h('b', null, 'Review misses'), h('span', null, `${dueItems().length} due today`)))
+      : tab === 'practice' ? h('div', { class: 'big-actions', style: { marginBottom: '14px' } },
+        h('a', { href: '#review', class: 'feature' }, h('b', null, 'Review'), h('span', null, `${dueItems().length} question(s) you missed are due`)),
+        h('a', { href: '#speed' }, h('b', null, '90-second quiz'), h('span', null, `Best: ${S.speedBest}`)))
+      : null;
+    Browser(main, {
+      tab, eyebrow: `${total} items · ${groups.length} areas · any order`, title: T.title, blurb: T.blurb, groups, cur, top,
+      hrefOf: (g, i) => `#${tab}-${g}-${i}`, markFn: markOf, labelFn: cardLabel,
+      renderPane: (pane, here, { redraw, nextHref }) => {
+        const c = here.it;
+        const ctx = {
+          mode: 'lesson', retry: false,
+          graded: (card, correct, el, base = 10) => { recordItem(card._id, correct); if (correct) addXp(base, el); save(); redraw(); },
+          solved: (card) => { const it = S.items[card._id]; if (!it || !it.b) { recordItem(card._id, true); save(); redraw(); } },
+          next: () => { if (nextHref) location.hash = nextHref; },
+        };
+        pane.append(h('div', { class: 'eyebrow', style: { marginBottom: '6px' } }, here.g.title, c.level >= 3 ? ' · hard' : c.level === 2 ? ' · medium' : ''), renderCard(c, ctx));
+      },
+    });
+  };
+}
+routes.practice = tabView('practice');
+routes.handson = tabView('handson');
+routes.scenarios = tabView('scenarios');
+routes.interview = tabView('interview');
+
+// ------------------------------------------------------------------ view: theory
+const theoryTopics = () => (C.theory ? C.theory.sections.flatMap(sec => sec.topics.map(t => ({ ...t, _sec: sec }))) : []);
+routes.theory = (main, arg) => {
+  S.theory = S.theory || {};
+  const groups = C.theory.sections.map(sec => ({ id: sec.id, title: `${sec.n}. ${sec.title}`, sec, items: sec.topics.map(t => (t._soon = !t.md, t)) }));
+  let cur = parseArg(arg);
+  if (!arg) {   // a bare #theory opens the last topic you read, or the first
+    const last = S.theoryLast && groups.find(g => g.items.some(t => t.id === S.theoryLast));
+    if (last) cur = { g: last.id, i: last.items.findIndex(t => t.id === S.theoryLast) };
+  } else if (!groups.some(g => g.id === cur.g)) {   // #theory-<topicId>
+    const g = groups.find(x => x.items.some(t => t.id === arg));
+    cur = g ? { g: g.id, i: g.items.findIndex(t => t.id === arg) } : { g: groups[0].id, i: 0 };
+  }
+  const written = groups.reduce((a, g) => a + g.items.filter(t => t.md).length, 0), all = groups.reduce((a, g) => a + g.items.length, 0);
+  Browser(main, {
+    tab: 'theory', eyebrow: `${all} topics · ${written} written · any order`, title: 'Theory', blurb: C.theory.intro, groups, cur,
+    hrefOf: (g, i) => `#theory-${g}-${i}`, labelFn: t => t.title,
+    markFn: t => S.theory[t.id] === 'done' ? 'ok' : S.theory[t.id] ? 'seen' : '',
+    renderPane: (pane, here, { redraw, nextHref }) => {
+      const t = here.it, sec = here.g.sec, area = SECTION_AREA[sec.id];
+      S.theoryLast = t.id;
+      if (!t.md) {
+        pane.append(h('article', { class: 'card' }, h('div', { class: 'eyebrow kind' }, `${sec.n}. ${sec.title}`), h('h2', null, t.title),
+          h('p', { class: 'muted' }, 'This topic is being written. Every other written topic is open: use the list or Next.')));
+        save(); return;
+      }
+      if (!S.theory[t.id]) S.theory[t.id] = 'seen';
+      save();
+      const body = linkGlossary(h('div', { class: 'md theory-md', html: md(t.md) }), 6);
+      const heads = $$('h2', body);
+      heads.forEach((x, k) => { x.id = `th-${t.id}-${k}`; });
+      const toc = heads.length > 3 ? h('nav', { class: 'toc', 'aria-label': 'On this page' }, heads.map((x, k) => h('a', { href: '#', onclick: e => { e.preventDefault(); x.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }, x.textContent))) : null;
+      const doneBtn = h('button', { class: 'btn' + (S.theory[t.id] === 'done' ? ' ok' : ' primary'), onclick: () => { S.theory[t.id] = S.theory[t.id] === 'done' ? 'seen' : 'done'; save(); doneBtn.className = 'btn' + (S.theory[t.id] === 'done' ? ' ok' : ' primary'); doneBtn.textContent = S.theory[t.id] === 'done' ? '✓ I can explain this without notes' : 'Mark: I can explain this without notes'; redraw(); } },
+        S.theory[t.id] === 'done' ? '✓ I can explain this without notes' : 'Mark: I can explain this without notes');
+      pane.append(h('article', { class: 'card theory' }, h('div', { class: 'eyebrow kind' }, `${sec.n}. ${sec.title}`), h('h1', { class: 'theory-h' }, t.title), toc, body));
+      const checks = t.check || [];
+      if (checks.length) {
+        pane.append(h('h3', { class: 'theory-sub' }, `Check yourself `, h('span', { class: 'muted small' }, `${checks.length} questions · answer in any order`)));
+        checks.forEach((c, k) => {
+          const ctx = { mode: 'lesson', retry: false, graded: (card, ok, el, base = 10) => { recordItem(card._id, ok); if (ok) addXp(base, el); save(); }, solved: () => {}, next: () => { const n = $$('.theory-q', pane)[k + 1]; if (n) n.scrollIntoView({ behavior: 'smooth', block: 'start' }); } };
+          pane.append(h('div', { class: 'theory-q' }, renderCard(c, ctx)));
+        });
+      }
+      const more = [['scenarios', 'Scenarios', t.scenarios], ['interview', 'Interview questions', t.interview], ['handson', 'Hands-on', t.hands]].filter(x => x[2] && x[2].length);
+      pane.append(h('div', { class: 'panel theory-next' },
+        h('div', { class: 'row', style: { flexWrap: 'wrap', gap: '8px' } }, doneBtn,
+          ...more.map(([tab, label, cs]) => { const g = tabGroups(tab).find(x => x.id === area); const i = g ? g.items.indexOf(cs[0]) : -1; return h('a', { class: 'btn', href: i >= 0 ? `#${tab}-${area}-${i}` : `#${tab}-${area}` }, `${label} for this topic (${cs.length})`); }))));
+    },
+  });
+};
+
 // ------------------------------------------------------------------ boot
 function shell() {
-  const navItems = [['home', 'Home'], ['modules', 'Learn'], ['practice', 'Practice'], ['plan', 'Plan'], ['more', 'More']];
+  const navItems = [['home', 'Home'], ['theory', 'Theory'], ['practice', 'Practice'], ['handson', 'Hands-on'], ['scenarios', 'Scenarios'], ['interview', 'Interview'], ['more', 'More']];
+  const tabItems = navItems.filter(([r]) => r !== 'home' && r !== 'more');
   const icons = {
     home: '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
     map: '<path d="M4 6h5l3 4h8M4 18h5l3-4"/><circle cx="4" cy="6" r="2"/><circle cx="4" cy="18" r="2"/><circle cx="20" cy="10" r="2"/>',
@@ -1316,18 +1508,25 @@ function shell() {
     practice: '<path d="M6 4v16M18 4v16M3 8v8M21 8v8M6 12h12"/>',
     plan: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>',
     more: '<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>',
+    theory: '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5M8 7h8M8 11h6"/>',
+    handson: '<path d="M8 9l-4 3 4 3M16 9l4 3-4 3M13.5 6l-3 12"/>',
+    scenarios: '<path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17v.5"/>',
   };
   const svg = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[k]}</svg>`;
-  const search = h('input', { type: 'search', class: 'search-in', placeholder: 'Search modules and lessons…', 'aria-label': 'Search modules and lessons', autocomplete: 'off' });
+  const search = h('input', { type: 'search', class: 'search-in', placeholder: 'Search topics and questions…', 'aria-label': 'Search topics and questions', autocomplete: 'off' });
   const results = h('div', { class: 'search-res', role: 'listbox', hidden: true });
+  let SIDX = null;
   const runSearch = () => {
-    const q = search.value.trim().toLowerCase();
+    const q = norm(search.value);
     if (q.length < 2) { results.hidden = true; return; }
-    const mods = (C.modules || []).filter(m => (m.title + ' ' + m.why).toLowerCase().includes(q)).slice(0, 5)
-      .map(m => h('a', { href: `#module-${m.id}`, role: 'option' }, h('b', null, m.title), h('span', null, 'Module')));
-    const les = C.worlds.flatMap(w => w.lessons.map(l => [w, l])).filter(([w, l]) => l.title.toLowerCase().includes(q)).slice(0, 7)
-      .map(([w, l]) => h('a', { href: `#lesson-${l.id}`, role: 'option' }, h('b', null, l.title), h('span', null, w.title)));
-    results.replaceChildren(...(mods.length + les.length ? [...mods, ...les] : [h('p', { class: 'muted' }, 'No matches')]));
+    if (!SIDX) {
+      SIDX = [];
+      for (const sec of C.theory.sections) sec.topics.forEach((t, i) => SIDX.push({ href: `#theory-${sec.id}-${i}`, label: t.title, kind: 'Theory' + (t.md ? '' : ' · coming'), text: norm(t.title + ' ' + plain(t.md || '')) }));
+      for (const tab of ['practice', 'handson', 'scenarios', 'interview']) for (const g of tabGroups(tab)) g.items.forEach((c, i) => SIDX.push({ href: `#${tab}-${g.id}-${i}`, label: cardLabel(c), kind: `${TABS[tab].title} · ${g.title}`, text: norm(cardLabel(c) + ' ' + plain(c.q || c.setup || '')) }));
+    }
+    const titleHit = SIDX.filter(x => norm(x.label).includes(q)), bodyHit = SIDX.filter(x => !norm(x.label).includes(q) && x.text.includes(q));
+    const hits = titleHit.concat(bodyHit).slice(0, 12).map(x => h('a', { href: x.href, role: 'option' }, h('b', null, x.label), h('span', null, x.kind)));
+    results.replaceChildren(...(hits.length ? hits : [h('p', { class: 'muted' }, 'No matches')]));
     results.hidden = false;
   };
   search.addEventListener('input', runSearch);
@@ -1344,7 +1543,7 @@ function shell() {
       h('div', { class: 'search' }, h('span', { class: 'search-ic', html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>' }), search, h('kbd', null, '⌘K'), results),
       h('div', { class: 'hud', id: 'hud' }))),
   );
-  document.body.append(h('nav', { class: 'tabbar', 'aria-label': 'Main' }, navItems.map(([r, t]) => h('a', { href: '#' + r, 'data-r': r, html: svg(r) + `<span>${t}</span>` }))));
+  document.body.append(h('nav', { class: 'tabbar', 'aria-label': 'Main' }, tabItems.map(([r, t]) => h('a', { href: '#' + r, 'data-r': r, html: svg(r) + `<span>${t}</span>` }))));
 }
 
 async function boot() {
