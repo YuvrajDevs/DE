@@ -93,12 +93,11 @@ module.exports = {
         - Why I care as a DE: stale statistics cause bad plans after bulk loads; EXPLAIN shows the plan; the WAL is how CDC works.`),
     ],
     hands: [
-      sql({ q: 'Referential integrity check (the kind you write because analytics engines do not enforce foreign keys): return every claim whose «dealer_id» has **no matching dealer** in «dealers». Use «NOT EXISTS» (not NOT IN). Return «claim_id, dealer_id». An empty result means integrity holds.', tables: ['claims', 'dealers'], level: 2, allowEmpty: true,
-        solution: `SELECT c.claim_id, c.dealer_id
-FROM claims c
-WHERE NOT EXISTS (SELECT 1 FROM dealers d WHERE d.dealer_id = c.dealer_id)
-ORDER BY c.claim_id;`,
-        hint: 'WHERE NOT EXISTS (SELECT 1 FROM dealers d WHERE d.dealer_id = c.dealer_id)' }),
+      sql({ q: 'Referential integrity check (the kind you write because analytics engines do not enforce foreign keys). Return one row: «total_claims» and «orphan_claims»: claims whose «dealer_id» has **no matching dealer** in «dealers». Use «NOT EXISTS» (not NOT IN). In a pipeline, «orphan_claims > 0» would fail the check.', tables: ['claims', 'dealers'], level: 2,
+        solution: `SELECT COUNT(*) AS total_claims,
+       SUM(CASE WHEN NOT EXISTS (SELECT 1 FROM dealers d WHERE d.dealer_id = c.dealer_id) THEN 1 ELSE 0 END) AS orphan_claims
+FROM claims c;`,
+        hint: 'SUM(CASE WHEN NOT EXISTS (SELECT 1 FROM dealers d WHERE d.dealer_id = c.dealer_id) THEN 1 ELSE 0 END)' }),
     ],
   }),
 

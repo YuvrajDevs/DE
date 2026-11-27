@@ -97,13 +97,13 @@ module.exports = {
       mcq('Sensors were offline for 2 days. Best way to represent that in features?', ['Fill with 0 silently', 'Use an explicit missing indicator and a documented imputation strategy', 'Drop the engine forever', 'Copy another engine\'s data'], 1, 'Missingness can itself be informative.'),
     ],
     hands: [
-      sql({ q: '**Point-in-time features.** For each engine, compute features **as of 2026-11-20 00:00** from «sensor_readings» using only readings **before** that moment and within the **previous 7 days**: «readings», «avg_temp» (1 dp), «max_temp». Return «engine_id, readings, avg_temp, max_temp» sorted by «engine_id». Engines with no readings in the window should not appear.', tables: ['sensor_readings'], level: 2, allowEmpty: true,
+      sql({ q: '**Point-in-time features.** For each engine, compute features **as of 2026-11-20 09:00** from «sensor_readings» using only readings **strictly before** that moment and within the **previous 60 minutes**: «readings», «avg_temp» (1 dp), «max_temp». Return «engine_id, readings, avg_temp, max_temp» sorted by «engine_id».', tables: ['sensor_readings'], level: 2,
         solution: `SELECT engine_id, COUNT(*) AS readings, ROUND(AVG(temperature_c), 1) AS avg_temp, MAX(temperature_c) AS max_temp
 FROM sensor_readings
-WHERE ts >= '2026-11-13 00:00:00' AND ts < '2026-11-20 00:00:00'
+WHERE ts >= '2026-11-20 08:00:00' AND ts < '2026-11-20 09:00:00'
 GROUP BY engine_id
 ORDER BY engine_id;`,
-        hint: 'Filter ts >= 7 days before AND ts < the as-of time (strictly before), then aggregate per engine.' }),
+        hint: 'Filter ts >= 60 minutes before AND ts < the as-of time (strictly before), then aggregate per engine.' }),
     ],
   }),
 

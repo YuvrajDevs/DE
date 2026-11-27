@@ -181,12 +181,13 @@ module.exports = {
       tf('You can trust an ERD\'s cardinality without checking the data.', false, 'Profile the data: hidden M:N relationships cause silent fan-out.'),
     ],
     hands: [
-      sql({ q: '**Check a cardinality assumption** with data. The model assumes each «engine_id» belongs to exactly one customer in «engines» (N:1 engine → customer, one row per engine). Verify there is **no engine_id appearing more than once**: return «engine_id, rows» for violations. An empty result confirms the assumption.', tables: ['engines'], level: 1, allowEmpty: true,
-        solution: `SELECT engine_id, COUNT(*) AS rows
-FROM engines
-GROUP BY engine_id
-HAVING COUNT(*) > 1;`,
-        hint: 'GROUP BY engine_id HAVING COUNT(*) > 1.' }),
+      sql({ q: '**Check cardinality assumptions with data.** The model says: each engine row is unique (one row per «engine_id»), and a customer owns **many** engines (1:N). Return one row with «engine_rows», «distinct_engines», «customers» (distinct customer_id) and «max_engines_per_customer». If engine_rows = distinct_engines, the first assumption holds; max > 1 confirms 1:N.', tables: ['engines'], level: 2,
+        solution: `SELECT COUNT(*) AS engine_rows,
+       COUNT(DISTINCT engine_id) AS distinct_engines,
+       COUNT(DISTINCT customer_id) AS customers,
+       (SELECT MAX(n) FROM (SELECT COUNT(*) AS n FROM engines GROUP BY customer_id)) AS max_engines_per_customer
+FROM engines;`,
+        hint: 'COUNT(*), COUNT(DISTINCT …), and a subquery for the max engines per customer.' }),
     ],
   }),
 
@@ -245,13 +246,12 @@ HAVING COUNT(*) > 1;`,
       mcq('«fact_claim_line» stores «claim_total» on every line. Summing claim_total across lines gives…', ['The correct total', 'Each claim\'s total multiplied by its number of lines', 'Zero', 'An error'], 1, 'A header-level measure at a line grain double-counts. Allocate it or keep it on the header table.'),
     ],
     hands: [
-      sql({ q: '**Grain check before a join.** The model assumes each claim has **at most one** credit note. Verify which claims would **fan out** when joined to «credit_notes»: return «claim_id, credit_notes» for claims with **more than one** credit note. If rows come back, joining claims to credit notes and summing «claim_amount» would double-count.', tables: ['credit_notes'], level: 2, allowEmpty: true,
-        solution: `SELECT claim_id, COUNT(*) AS credit_notes
-FROM credit_notes
-GROUP BY claim_id
-HAVING COUNT(*) > 1
-ORDER BY claim_id;`,
-        hint: 'GROUP BY claim_id in credit_notes, HAVING COUNT(*) > 1.' }),
+      sql({ q: '**Grain check before a join.** Before joining claims to «credit_notes» and summing claim amounts, check the join cardinality. Return one row: «claims_with_notes» (distinct claim_id in credit_notes), «credit_notes» (rows) and «max_notes_per_claim». If max > 1, the join would fan out and double-count claim amounts.', tables: ['credit_notes'], level: 2,
+        solution: `SELECT COUNT(DISTINCT claim_id) AS claims_with_notes,
+       COUNT(*) AS credit_notes,
+       (SELECT MAX(n) FROM (SELECT COUNT(*) AS n FROM credit_notes GROUP BY claim_id)) AS max_notes_per_claim
+FROM credit_notes;`,
+        hint: 'COUNT(DISTINCT claim_id), COUNT(*), and MAX of per-claim counts in a subquery.' }),
     ],
   }),
 

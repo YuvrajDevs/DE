@@ -168,14 +168,16 @@ ORDER BY day;`,
       tf('Alerting on every warning makes on-call more effective.', false, 'Alert fatigue makes people ignore alerts. Alert on consumer-impacting symptoms with context.'),
     ],
     hands: [
-      sql({ q: '**Per-source freshness monitor.** Using «sensor_readings» (one row per reading), return for each «engine_id» the latest reading time «last_ts» and «hours_behind»: hours between that and the **latest reading across all engines** (rounded to 1 dp). Show only engines more than **24 hours** behind, most behind first. (An empty result means every engine is reporting.)', tables: ['sensor_readings'], level: 3, allowEmpty: true,
-        solution: `WITH latest AS (SELECT engine_id, MAX(ts) AS last_ts FROM sensor_readings GROUP BY engine_id),
-     global AS (SELECT MAX(ts) AS max_ts FROM sensor_readings)
-SELECT l.engine_id, l.last_ts, ROUND((julianday(g.max_ts) - julianday(l.last_ts)) * 24, 1) AS hours_behind
-FROM latest l CROSS JOIN global g
-WHERE (julianday(g.max_ts) - julianday(l.last_ts)) * 24 > 24
-ORDER BY hours_behind DESC;`,
-        hint: 'MAX(ts) per engine, compare with the global MAX(ts) via CROSS JOIN, filter > 24 hours.' }),
+      sql({ q: '**Per-device completeness monitor.** Each engine should send **24 readings** in the «sensor_readings» window (one every 5 minutes for 2 hours). For engines that have any reading with a NULL «temperature_c» or NULL «oil_pressure_kpa», return «engine_id», «readings», «null_readings» and «pct_usable» (readings with both values present ÷ 24 × 100, rounded to 1 dp). Sort by «pct_usable» ascending, then «engine_id».', tables: ['sensor_readings'], level: 3,
+        solution: `SELECT engine_id,
+       COUNT(*) AS readings,
+       SUM(CASE WHEN temperature_c IS NULL OR oil_pressure_kpa IS NULL THEN 1 ELSE 0 END) AS null_readings,
+       ROUND(100.0 * SUM(CASE WHEN temperature_c IS NOT NULL AND oil_pressure_kpa IS NOT NULL THEN 1 ELSE 0 END) / 24, 1) AS pct_usable
+FROM sensor_readings
+GROUP BY engine_id
+HAVING SUM(CASE WHEN temperature_c IS NULL OR oil_pressure_kpa IS NULL THEN 1 ELSE 0 END) > 0
+ORDER BY pct_usable, engine_id;`,
+        hint: 'GROUP BY engine_id; count NULL readings with SUM(CASE …); keep groups with HAVING … > 0.' }),
     ],
   }),
 

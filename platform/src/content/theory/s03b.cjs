@@ -118,12 +118,15 @@ ORDER BY plant_id;`,
       mcq('A fact references dealer 88, which is not yet in dim_dealer. Good practice?', ['Drop the fact', 'Create an inferred dimension member for dealer 88 (or use Unknown), load the fact, update the member when details arrive', 'Stop the pipeline until the dealer arrives', 'Assign it to a random dealer'], 1, 'Facts are never lost; the dimension catches up.'),
     ],
     hands: [
-      sql({ q: '**Dimension quality test**: in «dim_customer_scd2», each «customer_id» must have **exactly one current row** («is_current = 1»). Return customers that violate this: «customer_id, current_rows». An empty result means the dimension is safe to join.', tables: ['dim_customer_scd2'], level: 2, allowEmpty: true,
-        solution: `SELECT customer_id, SUM(is_current) AS current_rows
+      sql({ q: '**Dimension quality report** for «dim_customer_scd2». Per «customer_id» return «versions» (rows), «current_rows» (sum of is_current) and «ok»: 1 if there is exactly one current row and the current row has «valid_to = \'9999-12-31\'», else 0. Sort by «customer_id».', tables: ['dim_customer_scd2'], level: 2,
+        solution: `SELECT customer_id,
+       COUNT(*) AS versions,
+       SUM(is_current) AS current_rows,
+       CASE WHEN SUM(is_current) = 1 AND SUM(CASE WHEN is_current = 1 AND valid_to = '9999-12-31' THEN 1 ELSE 0 END) = 1 THEN 1 ELSE 0 END AS ok
 FROM dim_customer_scd2
 GROUP BY customer_id
-HAVING SUM(is_current) <> 1;`,
-        hint: 'GROUP BY customer_id and check SUM(is_current) <> 1 (catches both 0 and 2+).' }),
+ORDER BY customer_id;`,
+        hint: 'GROUP BY customer_id; SUM(is_current); a CASE that checks both conditions.' }),
     ],
   }),
 
