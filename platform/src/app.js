@@ -1163,20 +1163,24 @@ routes.practice = (main, arg) => {
 
 // ------------------------------------------------------------------ views: posting coverage
 routes.posting = (main) => {
+  S.theory = S.theory || {};
+  const T_BY = Object.fromEntries(theoryTopics().map(t => [t.id, t]));
   main.append(h('div', { class: 'section-head', style: { marginTop: 0 } }, h('div', null, h('div', { class: 'eyebrow' }, 'Cummins · Data Engineer 1 · Pune · ReqID 2435232'), h('h2', null, 'Posting coverage')),
-    h('span', { class: 'muted', style: { fontSize: '13px' } }, 'Every line of the job posting, mapped to the lessons and practice that cover it.')));
+    h('span', { class: 'muted', style: { fontSize: '13px' } }, 'Every line of the job posting, mapped to the Theory topics that cover it. Each topic links to its own practice, scenarios, interview questions and hands-on tasks. ✓ = you marked it "I can explain this without notes".')));
+  let all = 0, mastered = 0;
   C.posting.forEach(sec => {
     main.append(h('div', { class: 'week-label' }, sec.section));
     main.append(h('div', { class: 'grid', style: { gap: '8px' } }, sec.items.map(it => {
-      const ls = it.lessons.filter(id => IDX[id]);
-      const done = ls.filter(id => S.lessons[id]).length;
+      const ts = it.topics.filter(id => T_BY[id]);
+      const done = ts.filter(id => S.theory[id] === 'done').length;
+      all += ts.length; mastered += done;
       return h('div', { class: 'cov-row' },
         h('div', { style: { minWidth: 0 } }, h('div', { html: mdInline(it.text) }), it.note ? h('div', { class: 'muted', style: { fontSize: '13px' } }, it.note) : null,
-          h('div', { class: 'lessons' }, ls.map(id => h('a', { class: 'lesson-pill' + (S.lessons[id] ? ' done' : ''), href: `#lesson-${id}` }, IDX[id].lesson.title)),
-            (it.practice || []).map(pk => h('a', { class: 'lesson-pill', href: `#practice-${pk}` }, '◎ ', (GYMS.find(g => g[0] === pk.split('-')[0]) || ['', pk])[1] + (pk.includes('-') ? ' · ' + (TOPIC_NAMES[pk.split('-')[1]] || '') : ''))))),
-        h('span', { class: 'pct' }, ls.length ? `${done}/${ls.length}` : '—'));
+          h('div', { class: 'lessons' }, ts.map(id => h('a', { class: 'lesson-pill' + (S.theory[id] === 'done' ? ' done' : ''), href: `#theory-${id}` }, S.theory[id] === 'done' ? '✓ ' : '', T_BY[id].title)))),
+        h('span', { class: 'pct' }, `${done}/${ts.length}`));
     })));
   });
+  main.append(h('p', { class: 'muted', style: { marginTop: '16px' } }, `Overall: ${mastered} of ${all} topic links mastered.`));
 };
 
 // ------------------------------------------------------------------ views: arena

@@ -4,7 +4,9 @@ Preparation for the **Cummins Data Engineer 1** role (Pune, Req ID 2435232).
 
 ## `platform/`: DE Arcade
 
-A gamified data engineering trainer that runs entirely in the browser:
+A data engineering trainer for the Cummins DE 1 loop that runs entirely in the browser. **Theory** is the single home for concepts: 14 sections, 178 topics (SQL in depth, Python for DE, Spark performance and Delta internals, streaming state, CDC, Databricks/Unity Catalog, governance and PII among them), each with a Senior depth layer. Practice, Hands-on, Scenarios and Interview tabs are generated from the same topics, and the Job posting checklist maps every line of the posting to Theory topics. Theory content lives in `platform/src/content/theory/` (`s*.cjs` base topics, `deep/*.cjs` senior-depth addenda, interview bank, scenarios and hard labs).
+
+Older material still in the repo:
 
 - **16 worlds, 85 lessons, ~560 cards**: orientation → toolbox (computers, terminal, project setup, Git, logins/connections, UI tour, end-to-end platform map) → SQL foundations → advanced SQL → Python → data modelling → ETL/ELT, orchestration & monitoring → data quality, governance, data products & BI → Spark/PySpark → big data ecosystem → streaming/Kafka/IoT → Scale Lab (100M requests, 1B events, 10 TB backfills) → cloud/DevOps/deployment → system design & incidents → AI-ready data → interview room.
 - **Practice hub** outside the main path: Query Gym, Python Gym, PySpark Gym, Scenario Room, Scale Lab, Concept Drills by topic, Bug Hunt, Interview Bank, Weak Spots.

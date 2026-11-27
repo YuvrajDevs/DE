@@ -88,7 +88,8 @@ for (const w of worlds) for (const l of w.lessons) {
   }
 }
 for (const set of practice) for (const c of set.cards) { cards++; types[c.t] = (types[c.t] || 0) + 1; }
-for (const sec of posting) for (const it of sec.items) for (const id of it.lessons) if (!ids.has(id)) throw new Error('posting: unknown lesson ' + id);
+{ const tids = new Set(theory.sections.flatMap(s => s.topics.map(t => t.id)));
+  for (const sec of posting) for (const it of sec.items) for (const id of it.topics) if (!tids.has(id)) throw new Error('posting: unknown theory topic ' + id); }
 for (const d of plan) for (const it of d.items) if (it.lesson && !ids.has(it.lesson)) throw new Error(`plan day ${d.day}: unknown lesson ${it.lesson}`);
 fs.writeFileSync(path.join(DIST, 'content.json'), JSON.stringify({ worlds, plan, glossary, projects, practice, posting, sql50, modules, theory }));
 

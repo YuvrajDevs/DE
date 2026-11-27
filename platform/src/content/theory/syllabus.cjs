@@ -4,7 +4,7 @@
 const S = (id, n, title, blurb, topics) => ({ id, n: 0, title, blurb, topics: topics.map(([tid, t]) => ({ id: tid, title: t })) });
 
 const out = {
-  intro: 'Every concept and tool in the Data Engineer 1 posting, from first principles to senior-level depth, in plain words. Each topic answers the same questions: what it is, why it exists, how it works, when you choose it, what the alternatives are, the trade-offs, and where it sits in a real company pipeline. Then you check yourself, practise on real situations and do one hands-on task. Nothing is locked: open any topic, any tab, in any order.',
+  intro: 'The single place for concepts: every tool and idea in the Data Engineer 1 posting, from first principles to senior-level depth. Each topic covers what it is, why it exists, how it works inside, when to choose it, alternatives and trade-offs, edge cases, behaviour at scale and how interviewers probe it, then a Senior depth section with internals and failure modes. Facts are current to late 2026 (Spark 4.1, Kafka 4.2, Airflow 3, pandas 3, Databricks Lakeflow and Unity Catalog). Every topic links to its own practice questions, scenarios, interview questions and hands-on tasks. Nothing is locked'',
   six: ['What is it?', 'Why does it exist? What problem does it solve?', 'How does it work inside?', 'When do you choose it, and when not?', 'What are the alternatives, and why pick this one?', 'Where does it sit in a real company pipeline?'],
   sections: [
     S('foundations', 1, 'Data engineering foundations', 'The mental model everything else hangs on: what the job is, what kinds of data exist, how data moves from the systems that run a business to the people who analyse it.', [
