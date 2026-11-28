@@ -55,6 +55,8 @@ function highlight(code, lang) {
 }
 
 // ------------------------------------------------------------------ markdown
+const prefGet = (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } };
+const prefSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* storage unavailable */ } };
 function md(src) {
   if (!src) return '';
   // custom ```flow blocks: "A -> B -> C"
@@ -1545,13 +1547,19 @@ routes.theory = (main, arg) => {
       }
       if (!S.theory[t.id]) S.theory[t.id] = 'seen';
       save();
-      const body = linkGlossary(h('div', { class: 'md theory-md', html: md(t.md) }), 6);
+      const full = !t.de1 || prefGet('de-depth', 'de1') === 'full';
+      const body = linkGlossary(h('div', { class: 'md theory-md', html: md(full ? t.md : t.de1) }), 6);
+      const depthBar = t.de1 ? h('div', { class: 'mode-bar depth-bar' },
+        h('div', { class: 'seg', role: 'tablist' },
+          h('button', { role: 'tab', 'aria-selected': String(!full), onclick: () => { prefSet('de-depth', 'de1'); redraw(); } }, 'DE 1 (interview)'),
+          h('button', { role: 'tab', 'aria-selected': String(full), onclick: () => { prefSet('de-depth', 'full'); redraw(); } }, 'Full depth')),
+        t.level ? h('span', { class: 'level-tag ' + (t.level === 'core' ? 'core' : 'aware') }, t.level === 'core' ? 'Core for this JD' : 'Awareness: know the basics') : null) : null;
       const heads = $$('h2', body);
       heads.forEach((x, k) => { x.id = `th-${t.id}-${k}`; });
       const toc = heads.length > 3 ? h('nav', { class: 'toc', 'aria-label': 'On this page' }, heads.map((x, k) => h('a', { href: '#', onclick: e => { e.preventDefault(); x.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }, x.textContent))) : null;
       const doneBtn = h('button', { class: 'btn' + (S.theory[t.id] === 'done' ? ' ok' : ' primary'), onclick: () => { S.theory[t.id] = S.theory[t.id] === 'done' ? 'seen' : 'done'; save(); doneBtn.className = 'btn' + (S.theory[t.id] === 'done' ? ' ok' : ' primary'); doneBtn.textContent = S.theory[t.id] === 'done' ? '✓ I can explain this without notes' : 'Mark: I can explain this without notes'; redraw(); } },
         S.theory[t.id] === 'done' ? '✓ I can explain this without notes' : 'Mark: I can explain this without notes');
-      pane.append(h('article', { class: 'card theory' }, h('div', { class: 'eyebrow kind' }, `${sec.n}. ${sec.title}`), h('h1', { class: 'theory-h' }, t.title), toc, body));
+      pane.append(h('article', { class: 'card theory' }, h('div', { class: 'eyebrow kind' }, `${sec.n}. ${sec.title}`), h('h1', { class: 'theory-h' }, t.title), depthBar, toc, body));
       const checks = t.check || [];
       if (checks.length) {
         pane.append(h('h3', { class: 'theory-sub' }, `Check yourself `, h('span', { class: 'muted small' }, `${checks.length} questions · answer in any order`)));

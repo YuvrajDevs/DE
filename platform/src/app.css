@@ -849,3 +849,7 @@ main { padding-block: 32px 80px; }
 .seg { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--line); }
 .seg button { border: 0; background: transparent; padding: 7px 16px; border-radius: 999px; font-weight: 600; font-size: 14px; color: var(--ink-2); cursor: pointer; min-height: 34px; }
 .seg button[aria-selected="true"] { background: var(--panel); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+
+.depth-bar { margin: 4px 0 18px; justify-content: flex-start; }
+.level-tag { font-size: 12.5px; font-weight: 600; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-2); }
+.level-tag.core { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--ink); }

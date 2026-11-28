@@ -56,6 +56,18 @@ const theory = require(path.join(SRC, 'content', 'theory', 'syllabus.cjs'));
     }
   }
   console.log(`theory: ${quickN} topics use the condensed text`);
+  // DE 1 versions: theory/de1/*.cjs export { topicId: { md, level } }; shown by default, full text behind a toggle
+  const de1Dir = path.join(dir, 'de1');
+  let de1N = 0;
+  if (fs.existsSync(de1Dir)) for (const f of fs.readdirSync(de1Dir).filter(f => f.endsWith('.cjs')).sort()) {
+    for (const [id, body] of Object.entries(require(path.join(de1Dir, f)))) {
+      const t = byId.get(id);
+      if (!t) throw new Error(`de1/${f}: topic ${id} is not in the syllabus`);
+      if (t.de1) throw new Error(`de1/${f}: topic ${id} written twice`);
+      t.de1 = body.md; if (body.level) t.level = body.level; de1N++;
+    }
+  }
+  console.log(`theory: ${de1N} topics have a DE 1 version`);
   for (const t of byId.values()) {
     const id = t.id;
     {
