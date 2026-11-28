@@ -339,7 +339,7 @@ function render() {
   const view = routes[name] ? name : 'home';
   if (current && current.cleanup) current.cleanup();
   current = null;
-  const section = { map: 'more', module: 'more', modules: 'more', mpractice: 'more', lesson: 'more', world: 'more', plan: 'more', review: 'practice', speed: 'practice', sql50: 'handson', arena: 'handson', mock: 'interview', projects: 'more', posting: 'more', glossary: 'more', settings: 'more' }[view] || view;
+  const section = { map: 'more', module: 'more', modules: 'more', mpractice: 'more', lesson: 'more', world: 'more', plan: 'more', review: 'practice', speed: 'practice', sql50: 'handson', arena: 'handson', mock: 'interview', projects: 'more', posting: 'more', glossary: 'more', settings: 'more', trun: 'theory', build: 'more' }[view] || view;
   $$('.nav a, .tabbar a, .rail a[data-r]').forEach(a => a.setAttribute('aria-current', a.dataset.r === section ? 'page' : 'false'));
   const main = $('main');
   main.replaceChildren();
@@ -1456,7 +1456,10 @@ function tabView(tab) {
           solved: (card) => { const it = S.items[card._id]; if (!it || !it.b) { recordItem(card._id, true); save(); redraw(); } },
           next: () => { if (nextHref) location.hash = nextHref; },
         };
-        pane.append(h('div', { class: 'eyebrow', style: { marginBottom: '6px' } }, here.g.title, c.level >= 3 ? ' · hard' : c.level === 2 ? ' · medium' : ''), renderCard(c, ctx));
+        const th = c._theory && theoryTopics().find(x => x.id === c._theory);
+        pane.append(h('div', { class: 'row', style: { justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' } },
+          h('div', { class: 'eyebrow' }, here.g.title, c.level >= 3 ? ' · hard' : c.level === 2 ? ' · medium' : ''),
+          th ? h('a', { class: 'btn ghost small', href: `#theory-${th.id}` }, 'From the theory: ', th.title, ' →') : null), renderCard(c, ctx));
       },
     });
   };
@@ -1465,6 +1468,54 @@ routes.practice = tabView('practice');
 routes.handson = tabView('handson');
 routes.scenarios = tabView('scenarios');
 routes.interview = tabView('interview');
+
+// ------------------------------------------------------------------ view: one theory topic's practice, start to finish
+const TRUN_KINDS = [['scenarios', 'Scenarios'], ['interview', 'Interview questions'], ['hands', 'Hands-on']];
+routes.trun = (main, arg) => {
+  const m = /^(\w+)-(scenarios|interview|hands)-(\d+)$/.exec(arg || '');
+  const all = theoryTopics();
+  const t = m && all.find(x => x.id === m[1]);
+  if (!t || !(t[m[2]] || []).length) { location.hash = '#theory'; return; }
+  const kind = m[2], cards = t[kind], i = Math.min(+m[3], cards.length);
+  const kinds = TRUN_KINDS.filter(([k]) => t[k] && t[k].length);
+  const label = TRUN_KINDS.find(([k]) => k === kind)[1];
+  const doneOf = k => t[k].filter(c => markOf(c) === 'ok').length;
+  const back = h('a', { class: 'btn ghost trun-back', href: `#theory-${t.id}` }, '← Back to the theory: ', t.title);
+  const tabs = h('div', { class: 'trun-tabs', role: 'tablist' }, kinds.map(([k, l]) =>
+    h('a', { href: `#trun-${t.id}-${k}-0`, role: 'tab', 'aria-selected': String(k === kind), class: k === kind ? 'on' : '' }, `${l} `, h('span', { class: 'muted' }, `${doneOf(k)}/${t[k].length}`))));
+  main.append(h('div', { class: 'trun-head' }, back, h('div', { class: 'eyebrow' }, `${t._sec.n}. ${t._sec.title}`), h('h2', null, t.title), tabs));
+
+  if (i >= cards.length) {   // the end of this set
+    const nextKind = kinds.find(([k]) => k !== kind && doneOf(k) < t[k].length);
+    const written = all.filter(x => x.md), nextT = written[written.findIndex(x => x.id === t.id) + 1];
+    main.append(h('section', { class: 'card trun-end' },
+      h('h2', null, `That's all the ${label.toLowerCase()} for this topic`),
+      h('p', { class: 'muted' }, `${doneOf(kind)} of ${cards.length} done. ` + (doneOf(kind) < cards.length ? 'Tap a number to go back to one you have not finished.' : 'Every one of them is done.')),
+      h('div', { class: 'trun-steps' }, cards.map((x, k) => h('a', { href: `#trun-${t.id}-${kind}-${k}`, class: markOf(x), title: cardLabel(x) }, markOf(x) === 'ok' ? '✓' : String(k + 1)))),
+      h('div', { class: 'trun-sum' }, kinds.map(([k, l]) => h('div', null, h('b', null, `${doneOf(k)}/${t[k].length}`), h('span', null, l)))),
+      h('div', { class: 'row', style: { flexWrap: 'wrap', gap: '10px', marginTop: '8px' } },
+        h('a', { class: 'btn primary', href: `#theory-${t.id}` }, '← Back to the theory'),
+        nextKind ? h('a', { class: 'btn', href: `#trun-${t.id}-${nextKind[0]}-0` }, `Next: ${nextKind[1]} (${t[nextKind[0]].length})`) : null,
+        nextT ? h('a', { class: 'btn', href: `#theory-${nextT.id}` }, 'Next topic: ', nextT.title) : null)));
+    return;
+  }
+  const c = cards[i];
+  const nextHref = `#trun-${t.id}-${kind}-${i + 1}`;
+  const steps = h('div', { class: 'trun-steps', 'aria-label': `${label} ${i + 1} of ${cards.length}` },
+    cards.map((x, k) => h('a', { href: `#trun-${t.id}-${kind}-${k}`, class: (k === i ? 'cur ' : '') + markOf(x), title: cardLabel(x) }, String(k + 1))),
+    h('span', { class: 'muted small' }, `${label} ${i + 1} of ${cards.length}`));
+  const ctx = {
+    mode: 'lesson', retry: false,
+    graded: (card, correct, el, base = 10) => { recordItem(card._id, correct); if (correct) addXp(base, el); save(); },
+    solved: (card) => { const it = S.items[card._id]; if (!it || !it.b) { recordItem(card._id, true); save(); } },
+    next: () => { location.hash = nextHref; },
+  };
+  main.append(steps, h('div', { class: 'trun-card' }, renderCard(c, ctx)),
+    h('div', { class: 's50-nav' },
+      i > 0 ? h('a', { class: 'btn', href: `#trun-${t.id}-${kind}-${i - 1}` }, '← Previous') : h('a', { class: 'btn ghost', href: `#theory-${t.id}` }, '← Theory'),
+      h('span', { class: 'muted small' }, `${i + 1} of ${cards.length}`),
+      h('a', { class: 'btn primary', href: nextHref }, i + 1 < cards.length ? 'Next →' : 'Finish this set →')));
+};
 
 // ------------------------------------------------------------------ view: theory
 const theoryTopics = () => (C.theory ? C.theory.sections.flatMap(sec => sec.topics.map(t => ({ ...t, _sec: sec }))) : []);
@@ -1509,10 +1560,12 @@ routes.theory = (main, arg) => {
           pane.append(h('div', { class: 'theory-q' }, renderCard(c, ctx)));
         });
       }
-      const more = [['scenarios', 'Scenarios', t.scenarios], ['interview', 'Interview questions', t.interview], ['handson', 'Hands-on', t.hands]].filter(x => x[2] && x[2].length);
+      const more = TRUN_KINDS.filter(([k]) => t[k] && t[k].length);
       pane.append(h('div', { class: 'panel theory-next' },
-        h('div', { class: 'row', style: { flexWrap: 'wrap', gap: '8px' } }, doneBtn,
-          ...more.map(([tab, label, cs]) => { const g = tabGroups(tab).find(x => x.id === area); const i = g ? g.items.indexOf(cs[0]) : -1; return h('a', { class: 'btn', href: i >= 0 ? `#${tab}-${area}-${i}` : `#${tab}-${area}` }, `${label} for this topic (${cs.length})`); }))));
+        h('div', { class: 'theory-next-head' }, h('b', null, 'Practise this topic'), h('span', { class: 'muted small' }, 'Only this topic\'s questions, with a way back here when you finish')),
+        h('div', { class: 'row', style: { flexWrap: 'wrap', gap: '8px' } },
+          ...more.map(([k, label]) => { const cs = t[k], done = cs.filter(c => markOf(c) === 'ok').length; return h('a', { class: 'btn', href: `#trun-${t.id}-${k}-0` }, `${label} (${done}/${cs.length})`); })),
+        h('div', { class: 'row', style: { marginTop: '14px' } }, doneBtn)));
     },
   });
 };
