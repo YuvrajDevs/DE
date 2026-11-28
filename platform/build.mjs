@@ -44,6 +44,18 @@ const theory = require(path.join(SRC, 'content', 'theory', 'syllabus.cjs'));
     }
   }
   console.log(`theory: ${deepN} topics extended with senior-depth addenda`);
+  // condensed rewrites: theory/quick/*.cjs export { topicId: T(`md`) }; they REPLACE the topic text (base + senior addenda)
+  const quickDir = path.join(dir, 'quick');
+  let quickN = 0;
+  if (fs.existsSync(quickDir)) for (const f of fs.readdirSync(quickDir).filter(f => f.endsWith('.cjs')).sort()) {
+    for (const [id, body] of Object.entries(require(path.join(quickDir, f)))) {
+      const t = byId.get(id);
+      if (!t) throw new Error(`quick/${f}: topic ${id} is not in the syllabus`);
+      if (t.quick) throw new Error(`quick/${f}: topic ${id} written twice`);
+      t.quick = true; t.md = body.md; quickN++;
+    }
+  }
+  console.log(`theory: ${quickN} topics use the condensed text`);
   for (const t of byId.values()) {
     const id = t.id;
     {
