@@ -60,7 +60,9 @@ function md(src) {
   // custom ```flow blocks: "A -> B -> C"
   src = src.replace(/```flow\n([\s\S]*?)```/g, (_, body) => {
     const parts = body.trim().split(/\s*->\s*/);
-    return '<div class="flow">' + parts.map(p => `<span>${esc(p)}</span>`).join('<i>→</i>') + '</div>';
+    // blank lines around the HTML block: without them Markdown treats the following lines as raw HTML
+    // and lists/paragraphs right after a flow diagram collapse into one line
+    return '\n\n<div class="flow">' + parts.map(p => `<span>${esc(p)}</span>`).join('<i>→</i>') + '</div>\n\n';
   });
   let html;
   if (window.marked) {
