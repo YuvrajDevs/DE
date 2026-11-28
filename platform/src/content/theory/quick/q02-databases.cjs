@@ -2,519 +2,573 @@ const { T } = require('../_t.cjs');
 
 module.exports = {
   relational: T(`
-    > **In one line:** a relational database stores **tables** of rows and typed columns, links them with **keys**, enforces rules with **constraints**, answers any question with **SQL**, and keeps concurrent changes safe with **transactions**.
+    > **In one line:** a relational database (also called a SQL database) stores data in **tables**, links the tables together using **keys**, checks the data with **rules**, lets you ask questions in **SQL**, and keeps changes safe when many people use it at once. MySQL, PostgreSQL, SQL Server and Oracle are all relational databases.
 
-    **Why it exists:** before the 1970s, data layouts were baked into programs, so every new question needed new code. Codd's relational model separated **what data means** (tables, relationships) from **how it's stored**, with a declarative language: say *what* you want, the database decides *how*.
+    ## What it looks like
 
-    ## The model
-    - **Table** = rows with the same columns, e.g. «claims(claim_id, dealer_id, claim_amount, status, submitted_at)». **Row** = one fact; **column** = one typed attribute (INTEGER, DECIMAL, VARCHAR, DATE, TIMESTAMP, BOOLEAN).
-    - **Primary key** identifies each row; **foreign key** points to another table's key («claims.dealer_id → dealers.dealer_id»).
-    - **Constraints** (NOT NULL, UNIQUE, CHECK «claim_amount >= 0», FOREIGN KEY) make the DB reject bad data.
+    A relational database is a set of tables, a bit like sheets in Excel. Each table holds one kind of thing.
 
-    ## Inside the engine
+    **claims table**
+
+    | claim_id | dealer_id | amount | status |
+    |---|---|---|---|
+    | 9001 | 14 | 500.00 | Approved |
+    | 9002 | 22 | 300.00 | Rejected |
+
+    **dealers table**
+
+    | dealer_id | name | region |
+    |---|---|---|
+    | 14 | Apex Motors | West |
+    | 22 | Zen Auto | North |
+
+    - Each **row** is one record. In the claims table, each row is one claim.
+    - Each **column** is one piece of information about that record, and it has a fixed **type**. For example, amount is a number with 2 decimals (DECIMAL), status is text (VARCHAR), and submitted_at would be a date and time (TIMESTAMP).
+    - The **primary key** is the column that identifies each row uniquely. Here it is claim_id in the claims table and dealer_id in the dealers table.
+    - A **foreign key** is a column that points to a row in another table. The dealer_id inside the claims table points to the dealers table. That link is the "relation" in "relational".
+
+    The database can also enforce **constraints**, which are rules it checks on every write. NOT NULL means a value must be present. UNIQUE means no two rows can share the value. CHECK (amount >= 0) means negative amounts are refused. A FOREIGN KEY constraint means a claim cannot point to a dealer that doesn't exist. If data breaks a rule, the database refuses it.
+
+    ## Why it was invented
+
+    Before the 1970s, the way data was laid out on disk was built into each program. Every new question needed new code. In 1970 Edgar Codd proposed the relational model, which separated **what the data means** (tables and how they relate) from **how it is physically stored**. You describe *what* you want in SQL, and the database works out *how* to get it. That idea is why one SQL query can answer questions nobody planned for when the database was designed.
+
+    ## What happens inside when you run a query
+
     «««flow
-    SQL -> Parser -> Optimiser (plan from statistics) -> Executor (scans, index lookups, joins) -> Storage (pages, buffer cache) -> Result
+    Your SQL -> Parser (checks the SQL is valid) -> Optimiser (picks the fastest plan) -> Executor (reads the data and does the joins) -> Storage on disk -> Result
     »»»
-    - Rows live in fixed-size **pages** (8 KB in Postgres/SQL Server). Tables are heaps (Postgres) or **clustered** on the primary key (SQL Server, MySQL InnoDB): range scans on that key are cheap; random inserts in the middle split pages.
-    - **Buffer pool** caches hot pages in memory. Analytical scans on an OLTP primary evict them and slow the app (another reason to extract from replicas/CDC).
-    - **Indexes** (B-trees) find rows without full scans.
-    - **Optimiser** picks index, join order and join type (hash vs nested loop) by cost from **statistics**: stale stats → bad plans.
-    - **Write-ahead log (WAL):** every change is logged *before* pages change; a commit is durable once the log is flushed; after a crash the log replays committed work and undoes the rest. The same log feeds **replication and log-based CDC**, which is why CDC is cheap and complete.
-    - **Concurrency:** locks and/or **MVCC** (readers see a snapshot while writers create new versions).
 
-    **Why it has lasted 50 years:** integrity under thousands of users, any question without changing storage, standard SQL across Postgres/MySQL/SQL Server/Oracle and analytics engines, mature tooling (backup, replication, security).
+    - **Pages:** the database stores rows in small fixed-size blocks called pages, usually 8 KB each. It reads and writes whole pages, not single rows.
+    - **Buffer pool:** the database keeps the most-used pages in memory, so it doesn't have to go to disk every time. If someone runs a huge report on a live app database, the report's pages push the app's pages out of memory and the app slows down. That is one reason data engineers copy data out of app databases instead of running heavy reports on them.
+    - **Indexes:** extra sorted structures that let the database find rows without reading the whole table (explained fully in the Indexing topic).
+    - **Optimiser:** before running a query, the database estimates the cost of different ways to run it (which index to use, which table to join first) using **statistics**, which are summaries of the data such as row counts. If the statistics are out of date, it can pick a slow plan. Running ANALYZE refreshes them.
+    - **Clustered tables:** some databases (SQL Server, MySQL's InnoDB) physically store rows sorted by the primary key. Reading a range of keys is then very cheap, but inserting a row in the middle forces pages to split.
+    - **Write-ahead log (WAL):** before the database changes any data, it first writes a note of the change into a log file. A change only counts as saved ("committed") once that note is safely on disk. If the server crashes, the database replays the log on restart to recover committed work and undo unfinished work. The same log is used to copy data to backup servers (replication) and by **CDC** (change data capture) tools that stream every change to a data pipeline. That's why CDC can capture every change without re-reading the whole table.
+    - **Concurrency:** many users read and write at the same time. Databases manage this with **locks** (one user waits for another) and/or **MVCC** (multi-version concurrency control): when a row is updated, the database creates a new version of it, so readers keep seeing the old version until the writer finishes. Readers then don't block writers.
 
-    ## Choose it or not
-    **Choose** for structured, related data where correctness matters (orders, invoices, claims, inventory), many small concurrent transactions, flexible queries. **Think twice** if record shapes vary wildly, writes must scale beyond one machine with simple key access, data is massive append-only time-series or unstructured, or the workload is analytics over billions of rows.
-    | Alternative | When |
+    ## Why it has lasted 50 years
+
+    It keeps data correct even with thousands of users at once. It can answer any question without changing how data is stored. SQL is a standard language, so the same skills work on Postgres, MySQL, SQL Server, Oracle and even analytics engines like Spark and Snowflake. And the tooling for backup, replication and security is very mature.
+
+    ## When to use it, and when to consider something else
+
+    Use a relational database for structured, connected data where correctness matters: orders, invoices, warranty claims, inventory. It is also the right choice when there are many small changes happening at once and you need to ask flexible questions.
+
+    Think twice when record shapes vary a lot from one record to the next, when writes must spread across many machines with only simple key lookups, when the data is a massive never-ending stream of time readings, or when the job is analysing billions of rows.
+
+    | Alternative | Use it when |
     |---|---|
-    | Document (MongoDB) | Nested documents, varying schema, access by document |
-    | Key-value (Redis, DynamoDB) | Ultra-fast lookups by key at huge scale |
-    | Wide-column (Cassandra, HBase) | Massive writes, time-series, known queries, multi-region |
-    | Columnar OLAP (Snowflake, BigQuery) | Large analytics |
-    | Distributed SQL (CockroachDB, Spanner, YugabyteDB) | Relational + ACID **and** horizontal scale |
-    **Trade-offs:** ACID consistency ↔ harder write scaling; constraints catch bad data ↔ schema changes need migrations; joins answer anything ↔ slow on huge tables; standard SQL ↔ vendor extensions still differ.
+    | Document database (MongoDB) | Records are nested JSON-like documents whose fields vary |
+    | Key-value store (Redis, DynamoDB) | You need extremely fast lookups by a single key at huge scale |
+    | Wide-column database (Cassandra, HBase) | You have massive writes, such as sensor readings, with known queries |
+    | Columnar warehouse (Snowflake, BigQuery) | You run large analytics queries |
+    | Distributed SQL (CockroachDB, Spanner, YugabyteDB) | You need relational tables and safe transactions, spread across many machines |
 
-    **In pipelines:** the most common **source** (CRM, ERP, plant systems). Extract without harming it (CDC, replicas, indexed incremental queries); respect constraints when writing back (reverse ETL); use its keys as **natural keys** for MERGE and dedupe. Relational thinking shapes lakehouse models even though lakehouses enforce few constraints.
+    **The trade-offs:**
+    - Strong correctness (ACID) makes it harder to spread writes across many machines.
+    - Constraints catch bad data, but changing the table structure needs planned migrations.
+    - Joins can answer anything, but they get slow on enormous tables.
+    - SQL is standard, but each vendor adds its own extras.
+
+    ## Where data engineers meet it
+
+    Relational databases are the most common **source** of data: CRM, ERP and plant systems usually run on them. A data engineer must pull data out **without hurting the live system**, using CDC, a read-only copy (replica), or small incremental queries on an indexed column. When writing results back into an app database (called reverse ETL), you must respect its constraints. The source's primary keys become the **natural keys** you use later to remove duplicates and to merge changes. Even though lakehouses enforce few rules, the habit of thinking in related tables shapes how lakehouse data is modelled.
 
     ## What goes wrong
-    - **NULL logic:** «NULL = NULL» is unknown; «NOT IN» a list containing NULL returns no rows.
-    - **Implicit casts:** VARCHAR vs number disables indexes and compares as text ('10' < '9').
-    - **FLOAT for money** → rounding errors; use DECIMAL.
-    - **Timestamps without zone** across regions → store UTC (TIMESTAMPTZ).
-    - **Long transactions** hold locks and block cleanup (Postgres bloat).
-    - **Stale statistics** after big loads → run ANALYZE.
-    - **Analytics engines don't enforce PK/FK** (Delta, Snowflake, BigQuery): your pipeline must test uniqueness and integrity.
 
-    **At scale:** scale up into terabytes and thousands of TPS; then read replicas, partitioning, then **sharding** (cross-shard joins/transactions become hard); distributed SQL automates sharding with consensus at a latency cost.
+    - **NULL logic surprises people.** NULL means "unknown", so NULL = NULL is not true, it is unknown. A NOT IN (...) list that contains a NULL returns no rows at all.
+    - **Comparing text with numbers.** If an ID is stored as text and compared to a number, the database may convert every value, which stops it using an index. Text also sorts differently: as text, '10' comes before '9'.
+    - **Using FLOAT for money.** FLOAT stores approximate values, so 0.1 + 0.2 isn't exactly 0.3. Use DECIMAL for money.
+    - **Timestamps without a time zone** across countries get mixed up. Store times in UTC (TIMESTAMPTZ in Postgres).
+    - **Long-running transactions** hold locks and stop the database cleaning up old row versions. In Postgres this causes "bloat": the tables grow with dead data.
+    - **Out-of-date statistics** after a big load lead to slow plans. Run ANALYZE after large loads.
+    - **Analytics engines don't enforce primary and foreign keys.** Delta, Snowflake and BigQuery let you declare them but don't stop duplicates, so your pipeline has to test uniqueness itself.
 
-    **Interview:** query lifecycle (parse → optimise with stats → execute → storage); DECIMAL vs FLOAT; PKs not enforced in Snowflake/Delta; the WAL = crash recovery, replication and CDC source.
+    ## Growing bigger
+
+    A single well-run relational database can handle terabytes and thousands of transactions per second just by using a bigger machine. Beyond that, teams add read-only copies (replicas) for reads, then split tables into partitions, and finally split the data across several databases (sharding). Sharding makes joins and transactions across shards hard. Distributed SQL databases do the sharding automatically, at the cost of slightly slower writes.
+
+    ## Interview answers
+
+    - **"What happens when you run a SQL query?"** "The database parses it, the optimiser uses statistics to choose a plan (which indexes and which join order), the executor runs that plan, and the data is read from pages on disk or from memory."
+    - **"Why DECIMAL instead of FLOAT for money?"** "FLOAT stores approximate binary values, so sums drift by tiny amounts. DECIMAL stores exact digits, which money requires."
+    - **"Are primary keys enforced in Snowflake or Delta?"** "No. They're informational only, so my pipeline removes duplicates and tests uniqueness."
+    - **"What is the write-ahead log for?"** "Every change is logged before data pages change. That gives crash recovery, and the same log feeds replication and CDC."
   `),
 
   nosql: T(`
-    > **In one line:** **NoSQL** databases drop parts of the relational model (fixed schema, joins or cross-row transactions) to gain **horizontal scale, flexible shapes or very low latency** for specific access patterns. Four families: **key-value, document, wide-column, graph**.
+    > **In one line:** NoSQL databases are databases that are **not** organised as SQL tables. They give up some relational features, such as fixed columns, joins or transactions across many rows, in exchange for **spreading easily across many machines**, **flexible data shapes**, or **very fast lookups**. There are four main families: key-value, document, wide-column and graph.
 
-    **Why:** 2000s web companies needed hundreds of thousands of writes/s across continents with weekly schema changes; hand-sharding relational DBs hurt. Amazon's Dynamo and Google's Bigtable designed around **known access patterns** and **partitioning across many cheap machines** from the start.
+    ## Why NoSQL exists
 
-    | Family | Model and access | Examples | Use |
-    |---|---|---|---|
-    | **Key-value** | key → opaque value; get/put/delete | Redis, DynamoDB, Memcached | Cache, sessions, ML feature serving, rate limits, leaderboards |
-    | **Document** | JSON-like documents, fields vary, nested; by ID + secondary indexes | MongoDB, Couchbase, Cosmos DB, Firestore | Catalogues, profiles, app objects |
-    | **Wide-column** | Rows by **partition key**, many columns sorted by **clustering key**; range scans inside a partition | Cassandra, HBase, Bigtable, Accumulo (cell-level security) | Time-series, event logs, IoT at huge scale |
-    | **Graph** | Nodes + edges with properties; traversals | Neo4j, Neptune | Supply-chain networks, fraud rings, recommendations |
-    Don't confuse **wide-column** (an operational data model) with **columnar** storage (Parquet, Snowflake: a scan layout).
+    A relational database mostly runs on one big machine. In the 2000s, companies like Amazon and Google needed to handle hundreds of thousands of writes per second from users all over the world, and they changed their data shapes every week. Splitting a relational database across many machines by hand was painful. So Amazon built Dynamo and Google built Bigtable. Both were designed from day one to spread data across many cheap machines and to serve a small number of **known questions** very fast. Today's NoSQL databases grew out of those designs.
 
-    ## How they scale
-    - **Partitioning:** the key's hash picks the owning node; adding nodes spreads load. Bad keys create **hot partitions**.
-    - **Replication:** each record on e.g. 3 nodes; reads/writes need 1, a quorum or all replicas → tunable **consistency vs latency vs availability** (Cassandra, DynamoDB).
-    - Often **eventually consistent** by default: a read right after a write may be stale; stronger options cost more.
-    - **LSM trees** (Cassandra, HBase, RocksDB): writes go to an in-memory memtable + commit log, flushed to immutable sorted files (SSTables) merged by **compaction**. Very fast writes; reads may check several files (bloom filters help); compaction adds write amplification and latency spikes. B-trees (most RDBMS) favour reads and in-place updates.
+    ## The four families
 
-    **Core rule: model for your queries.** List queries first, design tables so each hits one partition, **duplicate data** into query-shaped tables; new queries may need new tables.
+    **1. Key-value.** This works like a giant dictionary: you give a key and get back a value. The database doesn't look inside the value. The only operations are get, put and delete. Examples are Redis, DynamoDB and Memcached. Typical uses are caching, login sessions, serving ML features, rate limits and leaderboards. Example: the key "engine_77_latest" returns the value "health score 82".
 
-    | Choose when | Avoid when |
+    **2. Document.** Each record is a JSON-like document. Documents can contain nested data, and two documents in the same collection can have different fields. You fetch documents by ID or by indexed fields. Examples are MongoDB, Couchbase, Cosmos DB and Firestore. Typical uses are product catalogues, user profiles and app objects. Example: one claim document can contain its list of parts inside it.
+
+    **3. Wide-column.** Data is grouped by a **partition key** (for example engine_id), like one drawer per engine. Inside each drawer, rows are sorted by a **clustering key** (for example time). Reading "engine 77 from 10:00 to 10:05" means opening one drawer and reading one sorted chunk, which is very fast. Examples are Cassandra, HBase, Google Bigtable, and Accumulo (which can lock down individual cells). Typical uses are time-series data, event logs and IoT sensor data at huge scale.
+
+    **4. Graph.** Data is stored as dots (nodes) connected by lines (edges), and both can carry properties. Graph databases are good at following connections ("who is connected to whom, several steps away"). Examples are Neo4j and Amazon Neptune. Typical uses are supply-chain networks, fraud rings and recommendations.
+
+    **Don't mix up two similar names.** *Wide-column* (Cassandra) is a kind of operational database. *Columnar* storage (Parquet, Snowflake) is a way of laying out data on disk for fast analytics. They are completely different things.
+
+    ## How NoSQL databases grow so big
+
+    **Partitioning (splitting by key).** Every record has a key. The database scrambles the key into a number (called hashing) and uses that number to decide which machine stores the record. Engine 77 always lands on the same machine. To add capacity, you add machines and the data spreads out. If you choose a bad key, too much data lands on one machine. That machine is called a **hot partition**.
+
+    **Replication (copies).** Each record is stored on several machines, typically 3, so losing one machine loses nothing. When you read or write, you can choose how many copies must respond: one copy (fastest), a majority (called a **quorum**, which is safer), or all copies (slowest but most certain). This choice is called **tunable consistency**.
+
+    **Eventual consistency.** Because there are several copies, a new write may reach copy 1 before copies 2 and 3. If you read copy 2 immediately, you may briefly see the **old value**. All copies agree after a short time, or "eventually". Many NoSQL databases work this way by default, and stronger guarantees cost speed.
+
+    **Why their writes are so fast.** Cassandra, HBase and RocksDB use a design called an **LSM tree** (log-structured merge tree). It works in three steps:
+    1. A new write goes into memory, plus a quick safety log on disk.
+    2. When memory fills up, the data is written to disk as a new sorted file. The file is never edited again.
+    3. In the background, small files are merged into bigger ones. This is called **compaction**.
+
+    Writing is therefore very fast, like always writing on the next empty line of a notebook. Reading can be slower, because the answer may be spread across a few files (helper structures called bloom filters let the database skip files that can't contain the key). Compaction also uses extra disk work and can cause short slowdowns. Relational databases mostly use a different structure, the B-tree, which updates data in place and favours reads.
+
+    ## The golden rule: design for your questions
+
+    In a relational database you store data neatly first and can ask any question later. In NoSQL you must **list your questions first**, then design one table per question, so that each question reads from a single partition on a single machine. You often **copy the same data into several differently shaped tables**, one for each question. If a new question comes up later, you may need a new table.
+
+    ## When to choose NoSQL, and when not
+
+    | Choose NoSQL when | Avoid NoSQL when |
     |---|---|
-    | Huge scale of simple key access | Ad-hoc queries and joins |
-    | Flexible/nested schemas | Multi-record transactions are central |
-    | Low-latency global serving | Access patterns unknown or changing |
-    | Massive time-series writes | Data is relational and moderate (use Postgres) |
-    Also: time-series DBs (InfluxDB, TimescaleDB, ADX) for telemetry; search engines (Elasticsearch/OpenSearch) for text and logs.
+    | You have huge volumes of simple lookups by key | You need ad-hoc questions and joins |
+    | Data shapes are flexible or nested | Transactions across many records are central (banking) |
+    | You need very fast responses worldwide | You don't know your questions yet, or they keep changing |
+    | You write massive streams of sensor or log data | The data is relational and of normal size (just use Postgres) |
 
-    **In pipelines** (posting lists HBase, Cassandra, MongoDB, Accumulo, DynamoDB): **sources** (ingest via change streams/DynamoDB Streams, exports; expect nested, varied documents), **serving sinks** ("latest health score per engine" for an app; ML features in Redis), **telemetry stores** with analytical copies in the lakehouse. Do **analytics in the lakehouse**, never by scanning a Cassandra table.
+    There are also specialised databases: **time-series databases** (InfluxDB, TimescaleDB, Azure Data Explorer) for sensor data, and **search engines** (Elasticsearch, OpenSearch) for searching text and logs.
+
+    ## Where data engineers meet NoSQL
+
+    The job posting mentions HBase, Cassandra, MongoDB, Accumulo and DynamoDB. A data engineer meets them in three ways:
+    - **As a source.** You pull data out into the lakehouse, using change feeds (MongoDB change streams, DynamoDB Streams) or exports. Expect nested documents whose shape varies from record to record.
+    - **As a destination for serving.** You write results into one so an app can read them in milliseconds, for example "latest health score per engine", or ML features in Redis.
+    - **As a telemetry store,** with an analytics copy kept in the lakehouse.
+
+    **Never run analytics directly on a NoSQL database.** Scanning a whole Cassandra table is slow and slows down the live app. Copy the data to the lakehouse and analyse it there.
 
     ## What goes wrong
-    - **Hot partitions:** keying by «date» sends all of today's writes to one node → key by «engine_id» (+ time bucket).
-    - **Unbounded partitions:** one per engine forever grows to GBs → key «(engine_id, month)».
-    - **Read-your-write fails** under eventual consistency → stronger reads where it matters.
-    - **Schema-less ≠ no schema:** it lives in app code; ten document shapes accumulate, so ingestion must cope.
-    - Non-key filters are slow or forbidden (Cassandra «ALLOW FILTERING»).
-    - **Tombstones** from deletes slow reads until compaction.
 
-    **Interview:** name the families with a use each; why scalable (key partitioning, limited operations, tunable consistency); engine readings in Cassandra → partition «(engine_id, day)», cluster by «ts».
+    - **Hot partitions.** If you key sensor data by date, all of today's writes go to one machine while the others sit idle. Key by engine_id instead (optionally plus a time bucket).
+    - **Partitions that grow forever.** If one partition holds all of an engine's readings forever, it grows to gigabytes. Key by (engine_id, month) so each partition stays bounded.
+    - **Reading your own write fails.** Under eventual consistency, a user saves something, reads it back, and sees the old value. Use stronger (quorum) reads where it matters.
+    - **"Schema-less" doesn't mean "no schema".** The structure still exists, but it lives in the app code instead of the database. Over the years many different document shapes pile up, and your ingestion pipeline must handle all of them.
+    - **Filtering on non-key columns** is slow or not allowed. Cassandra makes you add ALLOW FILTERING as a warning sign.
+    - **Deletes leave markers.** A delete writes a marker called a **tombstone**. Tombstones slow down reads until compaction removes them.
+
+    ## Interview answers
+
+    - **"What are the types of NoSQL databases?"** "Key-value like Redis for caching, document like MongoDB for flexible records, wide-column like Cassandra for huge time-series data, and graph like Neo4j for connected data."
+    - **"Why do NoSQL databases scale well?"** "They split data across machines by key, they support only a limited set of operations so each request touches one place, and they let you trade consistency for speed."
+    - **"How would you store engine readings in Cassandra?"** "Partition by (engine_id, day) so each partition stays a manageable size and writes spread out, and sort rows by timestamp inside it. Then 'engine X today' is one fast read."
   `),
 
   sqlvsnosql: T(`
-    > **In one line:** **SQL** gives fixed schemas, joins, flexible queries and strong transactions, scaling mostly up; **NoSQL** gives flexible schemas and horizontal scale for **known access patterns**, often with weaker consistency and no joins. Decide by workload, consistency and query patterns, not fashion.
+    > **In one line:** SQL databases give you fixed tables, joins, flexible questions and strong safety guarantees, and they grow mainly by getting a bigger machine. NoSQL databases give you flexible data shapes and the ability to spread across many machines, but only for questions you planned in advance, often with weaker guarantees and no joins. Pick based on the workload, not on what is fashionable.
 
-    ## Decide in this order
-    1. **Access patterns:** ad-hoc, changing, many joins → SQL; a few known key patterns → NoSQL.
-    2. **Consistency:** money, inventory reservations → strong ACID; likes, telemetry, caches → eventual is fine.
-    3. **Scale:** a well-run relational DB handles many TB and tens of thousands of TPS; beyond that or global multi-region writes → NoSQL or distributed SQL.
-    4. **Shape variability:** stable → SQL; highly variable/nested → document store (or JSON columns in SQL).
-    5. **Team and operations:** what people know and the company supports.
+    ## How to decide, step by step
+
+    1. **What questions will you ask?** If questions are unpredictable, change often or need joins, choose SQL. If there are a few known lookups by key, NoSQL works.
+    2. **How correct must the data be at every moment?** Money and stock levels need strict correctness, so choose SQL. Likes, sensor readings and caches can tolerate a briefly out-of-date value, so NoSQL is fine.
+    3. **How big?** A well-run SQL database handles many terabytes and tens of thousands of transactions per second. Beyond that, or if you need writes in several countries at once, look at NoSQL or distributed SQL.
+    4. **How varied is the data shape?** Stable shapes suit SQL. Highly varied or nested shapes suit a document database (or JSON columns inside a SQL database).
+    5. **What does the team know and support?** A database nobody can operate is a risk.
 
     | | SQL | NoSQL |
     |---|---|---|
-    | Schema | Up front (on write) | Flexible, in the app |
-    | Queries | Anything, joins | By key/index, limited joins |
-    | Transactions | Multi-row, multi-table ACID | Often single-record; some multi-item with limits |
-    | Consistency | Strong | Often eventual, tunable |
-    | Scaling | Vertical; replicas; sharding hard | Horizontal by design |
-    | Modelling | Normalise data | Denormalise for queries |
-    | Best for | Business records, finance, flexible analysis | Massive key access, documents, time-series, caching |
+    | Structure | Defined up front; the database checks it on every write | Flexible; the structure lives in the app code |
+    | Questions | Anything, including joins | Lookups by key or index; few or no joins |
+    | Transactions | Safe changes across many rows and tables | Often one record at a time; some support a few items |
+    | Freshness of reads | Always the latest value | Often "eventually" the latest; adjustable |
+    | Growing | Bigger machine; read copies; splitting is hard | Spreads across machines by design |
+    | Modelling | Store each fact once (normalise) | Copy data into query-shaped tables |
+    | Best for | Business records, finance, flexible analysis | Massive key lookups, documents, time-series, caches |
 
-    **CAP/PACELC preview:** during a network partition a distributed DB chooses **consistency** (refuse some requests) or **availability** (answer, maybe stale); many NoSQL systems choose availability. PACELC: even without partitions you trade **latency vs consistency**.
+    ## CAP and PACELC: the trade-off when data has copies
 
-    **The modern blur:** Postgres has indexed JSONB, time series (Timescale), vectors (pgvector); MongoDB has multi-document ACID and rich queries; DynamoDB transactions cover up to 100 items; Cassandra's CQL looks like SQL with NoSQL rules; distributed SQL (Spanner, CockroachDB, YugabyteDB) = relational + ACID + horizontal scale. Senior framing: **which guarantees and access patterns does the workload need, at acceptable cost and operations?**
+    Distributed databases keep copies of data on several machines. Sometimes the network between those machines breaks, and they can't talk to each other. This is called a **network partition**. A machine that is cut off and receives a request has two options:
+    - **Refuse to answer**, because it can't be sure its copy is up to date. This prefers **consistency** (never return wrong or old data). Banking-type systems choose this.
+    - **Answer with what it has**, which might be old. This prefers **availability** (always respond). Many NoSQL systems, such as Cassandra, choose this.
 
-    **Polyglot persistence** is normal: Postgres for orders, Redis for sessions/cache, Elasticsearch for search, Cassandra for telemetry, a lakehouse for analytics. The DE moves and reconciles data among them (CDC, exports, contracts).
+    It can't do both while the network is broken. That is the **CAP theorem**.
+
+    **PACELC** adds that even when the network is fine, keeping all copies in sync means waiting for other machines to confirm, which is slower. So every day you also choose between **faster responses** that might be slightly stale and **always-correct responses** that are slower.
+
+    ## SQL and NoSQL now copy each other
+
+    The old rule ("SQL is strict and safe, NoSQL is flexible and scalable") is now blurry:
+    - **PostgreSQL** can store and index JSON documents (JSONB), time-series data (via TimescaleDB) and AI vectors (via pgvector).
+    - **MongoDB** now supports safe transactions across several documents, and rich queries.
+    - **DynamoDB** supports transactions covering up to 100 items.
+    - **Cassandra's** query language (CQL) looks like SQL, but it still follows NoSQL rules (no joins, query by key).
+    - **Distributed SQL** databases (Google Spanner, CockroachDB, YugabyteDB) offer SQL tables and safe transactions while spreading across many machines.
+
+    So the mature way to decide is not "SQL or NoSQL?" but: "What guarantees does this workload need, how will it be queried, and what can we afford to run?"
+
+    ## Polyglot persistence: several databases in one company
+
+    "Polyglot" means "many languages". Here it means a company uses a different database for each job:
+
+    | Job | Database |
+    |---|---|
+    | Orders and payments | PostgreSQL (safe transactions) |
+    | Login sessions and caching | Redis (very fast key-value) |
+    | Search box on the website | Elasticsearch |
+    | Engine sensor readings | Cassandra (wide-column) |
+    | Reports and analysis | A lakehouse or warehouse |
+
+    This is normal in large companies. **The data engineer's job is to move data between these systems** (using CDC, exports and agreed data contracts) and to check that the copies agree.
 
     ## What goes wrong
-    NoSQL chosen "for scale" at small size, then joins/reporting rebuilt painfully in app code. SQL chosen, then telemetry at 500k events/s hits a write wall → stream + wide-column or lakehouse. "No schema work" myth: ingestion must handle every historical document shape. "Eventual = a few ms" myth: under failures or cross-region it can be much longer.
 
-    **Interview:** when NoSQL (patterns + scale + consistency + variability, with an example each way); can NoSQL do transactions (some, with limits: DynamoDB, MongoDB); telemetry → stream + wide-column/lakehouse, claims → relational.
+    - **NoSQL chosen "for scale" when the data is small.** Later the business needs reports and joins, which then have to be painfully rebuilt in application code.
+    - **SQL chosen for huge sensor streams.** At 500,000 readings per second a single SQL database can't keep up with the writes. The fix is a streaming system feeding a wide-column database or a lakehouse.
+    - **The "no schema work" myth.** Old records keep their old shapes, so ingestion must handle every shape that ever existed.
+    - **The "stale for only a few milliseconds" myth.** During failures, or when copies are in different countries, data can stay stale for much longer.
+
+    ## Interview answers
+
+    - **"When would you choose NoSQL?"** "When I have huge volume, a few known lookups, flexible data shapes, and slightly stale reads are acceptable. Engine sensor readings fit Cassandra or a lakehouse. Warranty claims need joins and exact correctness, so they belong in a relational database."
+    - **"Can NoSQL databases do transactions?"** "Some can, with limits. MongoDB supports multi-document transactions and DynamoDB supports transactions of up to 100 items, but neither is as general as a relational database."
   `),
 
   rowcol: T(`
-    > **In one line:** **row storage** keeps a record's values together (great for reading/writing whole records); **column storage** keeps each column's values together (great for scanning few columns across many rows). It's the main reason analytical engines are fast.
+    > **In one line:** **row storage** keeps all the values of one record together on disk, which is good for apps that read and write whole records. **Column storage** keeps all the values of one column together, which is good for analytics that read a few columns across many rows. Column storage is the main reason analytics engines are fast.
 
-    **Layout** for «claims(id, dealer, amount, status)»: row = «1,14,500,A | 2,9,700,R | …»; column = «1,2,3… | 14,9,14… | 500,700,300… | A,R,A…» (per row group/segment).
+    ## Two ways to save the same table
 
-    ## Why columnar wins for analytics
-    1. **Read only needed columns:** «SUM(amount) GROUP BY status» touches 2 of 40 columns (~5% of bytes).
-    2. **Compression:** similar values per column → **dictionary** (status as tiny integers), **run-length** («West × 10,000» when sorted), **delta** (timestamps as small differences), **bit-packing**, then a codec (Snappy, ZSTD). 5-10× smaller is common.
-    3. **Vectorised execution:** CPUs process same-typed arrays in tight SIMD loops.
-    4. **Skipping:** min/max stats per column chunk; «amount > 100000» skips chunks whose max is lower. Sorted/clustered data skips more.
+    Take a claims table (imagine it actually has 40 columns):
 
-    ## Why row storage wins for transactions
-    One insert writes one place, not 40 column blocks; an update rewrites a small area (in columnar files it often rewrites a whole file, which is why lakehouse updates rewrite Parquet or use delete vectors); fetching one record by key is one page read, not 40 reads plus reassembly. Bridges: **HTAP** systems or CDC into a lakehouse.
+    | claim_id | dealer | status | amount |
+    |---|---|---|---|
+    | 1 | Apex | Approved | 500 |
+    | 2 | Zen | Rejected | 300 |
+    | 3 | Apex | Approved | 700 |
 
-    | Format | Layout | Use |
+    The disk stores data as one long sequence, so the database must choose an order.
+
+    **Row storage** writes one whole row, then the next:
+    «««text
+    1, Apex, Approved, 500 | 2, Zen, Rejected, 300 | 3, Apex, Approved, 700
+    »»»
+
+    **Column storage** writes one whole column, then the next:
+    «««text
+    claim_id: 1, 2, 3
+    dealer:   Apex, Zen, Apex
+    status:   Approved, Rejected, Approved
+    amount:   500, 300, 700
+    »»»
+
+    The data is identical; only the order on disk differs. That order changes everything about speed.
+
+    ## Why column storage wins for analytics
+
+    Analytics questions look like "total amount per status". That question needs only 2 of the 40 columns.
+
+    **1. It reads only the columns it needs.** Column storage reads just status and amount and skips the other 38, about 5% of the data. Row storage has to read every full row to pick out those 2 values.
+
+    **2. It compresses much better.** A single column holds similar values, which shrink well:
+    - **Dictionary encoding:** status contains the same few words over and over, so the file stores Approved = 0 and Rejected = 1 and then just small numbers.
+    - **Run-length encoding:** if 10,000 values in a row say "West", the file stores "West × 10,000" once. This only works if equal values sit next to each other, so sorting data before writing helps a lot.
+    - **Delta encoding:** timestamps are stored as small differences from the previous value (+1 second, +1 second) instead of full dates.
+    - **Bit-packing:** small numbers are stored using only the bits they need.
+    - A general compression **codec** (Snappy or ZSTD) then squeezes the result further.
+
+    Files 5 to 10 times smaller are common, and smaller files are faster to read.
+
+    **3. The CPU processes it faster.** A column is a long list of values of one type. Modern CPUs can apply one operation to many such values at once (this is called vectorised or SIMD processing).
+
+    **4. It can skip whole chunks.** Each chunk of a column records its smallest and largest value. For amount > 100000, any chunk whose largest amount is 5,000 is skipped without being read. This works best when the data is sorted, because then each chunk covers a narrow range.
+
+    ## Why row storage wins for apps (transactions)
+
+    Apps do things like "save this new claim" or "show me claim 2".
+    - **Saving one record:** row storage writes it in one place. Column storage must write into 40 separate column areas.
+    - **Updating one record:** row storage changes a small area. Column files often have to be **rewritten entirely** to change one row. That is why updates in a lakehouse rewrite Parquet files, or use "deletion vectors" (small markers saying "this row is deleted") to avoid full rewrites.
+    - **Reading one record by key:** row storage reads it in one go. Column storage must collect the values from 40 columns and stitch the row back together.
+
+    Some systems try to do both at once (called **HTAP**, hybrid transactional/analytical processing). More commonly, companies keep the app on a row database and copy its changes (CDC) into a columnar lakehouse for analytics.
+
+    ## Which formats use which layout
+
+    | Format | Layout | Used for |
     |---|---|---|
-    | CSV, JSON Lines | Row text | Exchange, raw landing |
-    | Avro | Row binary + schema | Kafka, streaming, write-heavy |
-    | Parquet | Columnar | Lakehouse (Delta, Iceberg), analytics |
-    | ORC | Columnar | Hive |
-    | Postgres/MySQL tables | Row pages | OLTP |
-    | Snowflake/BigQuery/Redshift | Columnar (proprietary) | Warehouse |
-    **Parquet is hybrid:** file → **row groups** (e.g. 128 MB) → column chunks → pages, with a footer of schema and stats. Row groups let workers split files; column chunks let them read selectively. Sorting/clustering before writing tightens stats and compression.
+    | CSV, JSON Lines | Rows, plain text | Exchanging files, raw landing |
+    | Avro | Rows, compact binary with a schema | Kafka messages, streaming, lots of writes |
+    | **Parquet** | Columns | **Lakehouse tables (Delta, Iceberg) and analytics** |
+    | ORC | Columns | Older Hadoop/Hive systems |
+    | PostgreSQL, MySQL tables | Rows | Apps (OLTP) |
+    | Snowflake, BigQuery, Redshift | Columns (their own private format) | Data warehouses |
 
-    **Choose:** write-heavy, record-at-a-time → row (Avro, OLTP DBs); read-heavy scans → columnar. Common pipeline: **Avro/JSON on the wire → Parquet/Delta at rest.**
+    **Parquet is actually a mix of both.** A Parquet file is split into big blocks of rows called **row groups** (often around 128 MB each). Inside each row group, data is stored column by column, as **column chunks** split into smaller **pages**. At the end of the file, a **footer** records the schema and the min/max statistics. Row groups let many workers read different parts of one file at the same time, and column chunks let each worker read only the columns it needs. Sorting the data before writing makes the statistics tighter and the compression better.
+
+    **Choosing:** if data is written one record at a time and read as whole records, use row storage (Avro, app databases). If it is read in big scans of a few columns, use column storage. A very common pipeline is: **data travels as Avro or JSON, and is stored as Parquet/Delta** for analysis.
 
     ## What goes wrong
-    «SELECT *» on a wide columnar table reads every column. Tiny files waste metadata and compress poorly. Unsorted data makes min/max useless → cluster/Z-order on common filters. Many nullable columns are cheap in columnar (NULLs compress away). Frequent single-row updates on Parquet cause write amplification → batch updates, use delete vectors.
 
-    **At scale:** a 10 TB table, 3 columns, good pruning → maybe 50 GB scanned instead of 10 TB: 10 seconds vs 30 minutes, and a much smaller bill in pay-per-scan engines.
+    - **SELECT * on a wide columnar table** reads every column and throws away the main benefit. Ask only for the columns you need.
+    - **Thousands of tiny files** waste time on file overhead and compress poorly.
+    - **Unsorted data** makes min/max skipping useless, because every chunk contains every range of values. Cluster or Z-order the data on the columns people filter by.
+    - **Many empty (NULL) columns** are cheap in columnar storage, because NULLs compress to almost nothing.
+    - **Frequent single-row updates on Parquet** keep rewriting whole files (called write amplification). Update in batches, or use deletion vectors.
 
-    **Interview:** why Parquet (selected columns, encodings, stats, splittable row groups, embedded schema); why not Parquet for Kafka messages (small individual records; Avro fits); **predicate pushdown** = passing filters to the reader so it skips row groups/files by stats before loading.
+    ## Why it matters at scale
+
+    Imagine a 10 TB table where a query needs 3 columns and can skip most chunks. It may read only about 50 GB instead of 10 TB, which is roughly 10 seconds instead of 30 minutes. On engines that charge per byte scanned, the bill is far smaller too.
+
+    ## Interview answers
+
+    - **"Why Parquet?"** "It stores data by column, so queries read only the columns they need. It compresses well through encodings, stores min/max statistics so chunks can be skipped, splits into row groups so many workers can read one file in parallel, and keeps its schema inside the file."
+    - **"Why not use Parquet for Kafka messages?"** "Kafka sends small individual records, and columnar formats only pay off for large batches. Avro, a row format with a schema, fits better."
+    - **"What is predicate pushdown?"** "The filter, such as amount > 100000, is passed down to the file reader, which uses the statistics to skip row groups and files that can't match before loading anything."
   `),
 
   keys: T(`
-    > **In one line:** keys answer **"which one"**: a **primary key** uniquely identifies a row, a **foreign key** points to another table's row, a **unique constraint** forbids duplicates. They drive joins, dedupe, MERGE and data quality.
+    > **In one line:** a key is a column (or a few columns together) whose value identifies one specific row, like a roll number in a class. A **primary key** identifies each row in its own table, a **foreign key** points to a row in another table, and a **unique constraint** forbids duplicate values. Keys are what make joins, de-duplication and merging possible.
 
-    | Key | Meaning | Example |
+    ## The kinds of keys
+
+    Example tables: a claims table with claim_id and dealer_id, and a dealers table with dealer_id and dealer_code.
+
+    - **Primary key (PK):** the column that uniquely identifies each row in its table. It can't be empty, and a table has exactly one. Example: claim_id in the claims table.
+    - **Candidate key:** any column (or set of columns) that *could* serve as the primary key because it's also unique. An engine might be identifiable by both engine_id and serial_no, so both are candidates.
+    - **Natural key (also called business key):** an identifier that has meaning in the real world or the source system, such as an engine serial number, an invoice number, a car's VIN, or a dealer code like D-014.
+    - **Surrogate key:** an identifier with no business meaning, generated by the system, usually a running number (1, 2, 3, …) or a hash. Example: dealer_sk = 1042.
+    - **Composite key:** a key made of several columns together, used when no single column is unique. Example: (order_id, line_no) identifies one line on one order.
+    - **Foreign key (FK):** a column that refers to the key of another table. Example: dealer_id in the claims table points to the dealers table.
+    - **Unique constraint:** a rule that no two rows may have the same value in a column, without making that column the primary key. Example: dealer_code must be unique. (Empty values are usually allowed.)
+
+    ## Why keys matter
+
+    **Identity.** To update or delete "claim 9001", the database needs to know exactly which row that is. Without a unique key you might change several rows, or the wrong one.
+
+    **Integrity.** A foreign key ensures a claim can only point to a dealer that exists. A claim pointing to a non-existent dealer is called an **orphan**.
+
+    **Speed.** Databases build an index on the primary key automatically, so finding a row by its key is very fast.
+
+    **Pipelines depend on keys.** Almost every data engineering task uses them:
+    - **Deduplication:** keeping exactly one row per claim_id when the same claim arrives twice.
+    - **MERGE (also called upsert):** if a row with this key already exists, update it; otherwise insert it.
+    - **CDC apply:** when the source reports "claim 9001 changed", the key tells you which row to change.
+    - **Reconciliation:** comparing keys between source and target shows exactly which records are missing.
+
+    ## Who enforces the rules?
+
+    **App databases** (PostgreSQL, SQL Server, MySQL) check keys on every write. A second row with an existing primary key is refused, using a unique index behind the scenes. A claim pointing to a missing dealer is refused. When you delete a dealer that still has claims, the database follows the rule you chose:
+    - **RESTRICT** refuses the delete.
+    - **CASCADE** deletes the dealer's claims too.
+    - **SET NULL** keeps the claims but empties their dealer_id.
+
+    **Analytics engines mostly do not enforce primary and foreign keys.** This applies to Delta Lake, Snowflake, BigQuery and Redshift. Checking every row while bulk-loading millions of rows would be far too slow. You can still declare keys, and optimisers and BI tools use those declarations as hints. But nothing stops duplicates from getting in. (Delta does enforce two simpler rules: NOT NULL and CHECK constraints such as "amount >= 0".) **In a lakehouse, uniqueness is the pipeline's job:** remove duplicates before loading, write with MERGE rather than blind appends, and run a test that alerts if any key appears twice.
+
+    ## Natural key vs surrogate key
+
+    | | Natural key (e.g. D-014) | Surrogate key (e.g. 1042) |
     |---|---|---|
-    | Primary (PK) | Unique, not NULL, one per table | «claims.claim_id» |
-    | Candidate | Any column set that could be the PK | engine_id and serial_no |
-    | Natural (business) | Has business meaning | Serial number, invoice no., VIN |
-    | Surrogate | Meaningless generated ID (sequence, hash) | «dealer_sk = 1042» |
-    | Composite | Several columns together | «(order_id, line_no)» |
-    | Foreign (FK) | References another key | «claims.dealer_id → dealers» |
-    | Unique constraint | No duplicates (NULLs usually allowed) | «dealers.dealer_code» |
+    | Can it change? | Yes, the business might re-code a dealer | No, it never changes once assigned |
+    | Several source systems | The CRM calls a dealer D-014 while the ERP calls the same dealer 5521 | One surrogate key represents the dealer, and both source codes map to it |
+    | Keeping history (SCD Type 2) | If you keep a new row each time a dealer's details change, D-014 appears on several rows and is no longer unique | Each version of the dealer gets its own surrogate key, so every row stays unique |
+    | Join speed | Long text values are slower to compare | Small integers are fast |
 
-    **Why:** identity (otherwise updates/deletes are ambiguous), integrity (no orphan claims), performance (usually indexed), and pipelines: **dedupe** (one row per claim_id), **MERGE** (update if key exists, else insert), **CDC apply**, **reconciliation** (which keys are missing).
+    **The usual design:** keep the natural key as an ordinary column, so people can still search for "D-014". Use the surrogate key as the primary key of the dimension table. When loading fact rows (such as claims), look up the dealer's surrogate key and store it on each claim.
 
-    **Enforcement:** PK/UNIQUE checked by a unique index on every write; FK requires the parent to exist, and on parent delete applies RESTRICT, CASCADE or SET NULL. **Analytical engines (Delta, Snowflake, BigQuery, Redshift) mostly don't enforce PK/FK** (too slow on bulk loads; Delta enforces NOT NULL and CHECK only). Declarations still help optimisers and BI tools, but **your pipeline must enforce uniqueness (dedupe + MERGE) and test it**.
+    ## What makes a good key
 
-    | | Natural key | Surrogate key |
-    |---|---|---|
-    | Stability | Can change (dealer re-coded) | Never changes |
-    | Across sources | Each system has its own | One key for the conformed entity |
-    | SCD2 history | Repeats across versions | One per version |
-    | Join speed | Possibly long strings | Compact integers |
-    Typical design: keep the natural key as an attribute, use a surrogate as the dimension PK, look it up when loading facts.
+    A good key is **unique**, **always present**, **never changes**, and is **simple**. Never build keys from things that can change, such as names, email addresses or phone numbers.
 
-    **Good keys:** unique, always present, stable, simple; never built from changeable attributes (names, emails, phones). State the **grain** of composite keys («(engine_id, reading_ts)» = one row per engine per timestamp). **Hash keys** (SHA-256 of business columns) give deterministic IDs across runs; handle NULLs and column order consistently. Normalise composite natural keys (trim, case) before hashing or joining.
+    - **Composite keys:** say clearly what one row represents. This is called the **grain**. For engine readings, (engine_id, reading_ts) means "one row per engine per timestamp".
+    - **Hash keys:** you can generate a key by running business columns through a hash function such as SHA-256. The same input always gives the same output, so every pipeline run produces identical IDs. Clean the values the same way every time before hashing: trim spaces, use consistent capitalisation, keep the columns in a fixed order, and handle empty values consistently. Otherwise identical records get different hashes.
 
-    ## What goes wrong
-    - "Unique" source key isn't (claim numbers reused across countries) → composite «(country, claim_no)»; **test**, don't trust docs.
-    - **NULL keys** drop out of joins and group together in dedupe → reject/quarantine.
-    - Case/whitespace («D-014» vs «d-014 ») → normalise.
-    - **Leading zeros:** «00123» as integer collides with «123» → keep IDs as strings.
-    - Source re-assigns a code → history points wrong; surrogates + crosswalk protect it.
-    - **Orphan facts** (unknown dimension key) → map to «-1 Unknown» (or inferred member), quarantine and alert, never drop silently.
-    - Duplicate PKs after a non-idempotent load in a non-enforcing engine silently inflate totals.
+    ## What goes wrong in real life
 
-    **Interview:** natural vs surrogate (stability, multi-source, SCD2, speed); guaranteeing uniqueness without enforcement (ROW_NUMBER dedupe, MERGE, dbt «unique» tests, alerts); missing dimension keys (unknown member, quarantine, late-arriving dimension handling).
+    - **The "unique" key isn't unique.** The documentation says claim numbers are unique, but India and Brazil both have claim number 1001. Use a composite key (country, claim_no), and always test uniqueness rather than trusting documentation.
+    - **Empty (NULL) keys** silently fail to match in joins, and during deduplication all empty keys are treated as one group, so real records vanish. Reject or quarantine rows with empty keys.
+    - **Spaces and capitalisation:** "D-014" and "d-014 " look the same to a person but not to a computer. Clean both sides before joining.
+    - **Leading zeros:** if the ID "00123" is stored as a number it becomes 123 and can collide with a different record. Store IDs as text.
+    - **The source re-uses an old code** for a new dealer, so old history suddenly points to the wrong dealer. Surrogate keys plus a mapping table between old and new codes protect you.
+    - **A fact arrives for a dimension row you don't have yet** (for example a claim for a dealer not yet loaded). Never drop it silently. Link it to a special "Unknown" row (usually key -1), or create a placeholder row for that dealer to be filled in later. Then quarantine it and alert someone.
+    - **Duplicate keys after a re-run.** A pipeline appends the same day twice. Because the lakehouse doesn't enforce keys, nothing stops it, and totals quietly double.
+
+    ## Interview answers
+
+    - **"Natural vs surrogate key?"** "A natural key comes from the business or the source, like a dealer code. A surrogate key is a meaningless integer generated by the warehouse. I use surrogate keys for dimensions because they never change, they unify the same entity coming from several systems, they let me keep history, and they make joins fast. I keep the natural key as an ordinary column."
+    - **"Your lakehouse doesn't enforce primary keys. How do you guarantee uniqueness?"** "I deduplicate with ROW_NUMBER, keeping one row per key, write with MERGE instead of append so re-runs don't duplicate, and run a uniqueness test, such as a dbt unique test, that alerts when a key repeats."
+    - **"A claim arrives for a dealer you don't have?"** "I don't drop it. I link it to an Unknown dealer row or a placeholder row for that dealer code, alert on it, and fix the link when the dealer's details arrive."
   `),
 
   indexing: T(`
-    > **In one line:** an index is a separate sorted structure that finds rows **without reading the whole table**, like a book index. Reads on indexed columns get fast; every write gets a bit slower and the database bigger.
+    > **In one line:** an index is an extra, sorted structure that lets the database **find rows without reading the whole table**, just like the index at the back of a book lets you jump to a page. Searches on indexed columns become very fast, but every write becomes a little slower and the database takes more space.
 
-    **Example:** «WHERE claim_id = 9001» on 200M rows: no index = full scan (seconds-minutes); B-tree = ~4 levels, a handful of pages (milliseconds).
+    ## The idea, with an example
 
-    **B-tree:** a balanced tree of pages; internal pages hold sorted keys and child pointers, leaves point to rows (or hold them, if clustered). Lookup is **O(log n)**; hundreds of keys per page means 4 levels cover billions of rows. Sorted keys also serve **ranges**, «ORDER BY» and MIN/MAX.
+    Suppose the claims table has 200 million rows and you run:
+    «««sql
+    SELECT * FROM claims WHERE claim_id = 9001;
+    »»»
+    - **Without an index**, the database must read every row and check each one. This is called a **full table scan**, and it can take seconds to minutes.
+    - **With an index on claim_id**, the database looks up 9001 in the sorted index, which tells it exactly where the row is. It reads a handful of pages and answers in milliseconds.
 
-    | Index | Good for |
-    |---|---|
-    | B-tree (default) | Equality, ranges, sorting |
-    | Hash | Equality only |
-    | Clustered (rows stored in key order; one per table) | Range scans on that key (SQL Server, InnoDB PK) |
-    | Secondary / non-clustered | Extra lookup paths |
-    | Composite | Filters on the leading columns |
-    | Covering (has all needed columns) | Answer from the index alone |
-    | Bitmap | Low-cardinality analytics columns |
-    | Inverted / full-text (GIN) | Text search, arrays, JSONB |
-    | Partial / filtered | "Only open claims" |
-    | BRIN (Postgres) | Tiny index for naturally ordered huge tables (append-only telemetry by time) |
+    ## How the standard index works: the B-tree
 
-    **Leftmost-prefix rule:** «(dealer_id, submitted_at)» helps «dealer_id = 14» and «dealer_id = 14 AND submitted_at > …», **not** «submitted_at > …» alone. Equality column first, range column after.
+    Most indexes are **B-trees**, a balanced tree of pages that works like the levels of a phone book:
+    - The **top page** says something like "IDs 1 to 50 million are down this branch, 50 to 100 million down that one".
+    - Each **level below** narrows the range further.
+    - The **bottom pages** (called leaves) point to the actual rows, or contain the rows themselves in a clustered index.
 
-    **Costs:** every write updates every index (10 indexes ≈ 10 extra writes); indexes can be as big as the table; bulk loads are faster with indexes dropped and rebuilt; fragmentation/bloat; stats must be fresh.
-    **Rule of thumb:** an index helps when a query returns a small fraction of rows (a few percent or less); otherwise a scan is cheaper.
+    Each page holds hundreds of keys, so only about **4 levels are needed to cover billions of rows**. A lookup touches just a few pages. (In computer science terms, the work grows with the logarithm of the table size, written O(log n), so doubling the table barely changes lookup time.)
 
-    ## When an index isn't used
-    Function on the column («DATE(submitted_at) = …», «UPPER(code)») → rewrite as a range or add a function index. Implicit type conversion. Leading wildcard «LIKE '%pump'». Low selectivity (status matching 60%). OR across columns or wrong composite order. Stale statistics.
+    Because the keys are kept sorted, a B-tree also helps with **ranges** (claim_id BETWEEN 9000 AND 9100), **sorting** (ORDER BY claim_id), and **MIN/MAX**.
 
-    **Analytics equivalent:** warehouses/lakehouses mostly skip **data** instead: partition pruning, min/max stats per file/row group (zone maps), clustering / Z-order / liquid clustering for multi-column skipping, **bloom filters** for high-cardinality equality, Snowflake micro-partition pruning, BigQuery clustering, Delta data skipping. "Add an index" in OLTP becomes **"fix the data layout"** in OLAP.
+    ## Types of indexes
 
-    **In pipelines:** incremental extracts on «updated_at» need an index on it (or every extract full-scans production; ask the DBA or use CDC); MERGE into a serving DB needs an indexed key; in the lakehouse, partition by date, cluster by common filters, compact small files.
+    | Index type | What it is | Good for |
+    |---|---|---|
+    | B-tree (the default) | Sorted tree, as described above | Exact matches, ranges, sorting |
+    | Hash | Maps each value straight to a location | Exact matches only; can't do ranges |
+    | Clustered | The table's rows themselves are stored in key order; a table can have only one | Range scans on that key (SQL Server tables, MySQL InnoDB primary keys) |
+    | Secondary (non-clustered) | An extra index pointing back to the rows | Additional ways to look rows up |
+    | Composite | An index on several columns together | Filters on the first column(s) of the index |
+    | Covering | An index that contains every column the query needs | Answering the query from the index alone, without visiting the table |
+    | Bitmap | One bit-map per distinct value | Columns with few distinct values in analytics |
+    | Inverted / full-text (e.g. Postgres GIN) | Maps each word or element to the rows containing it | Text search, arrays, JSON fields |
+    | Partial (filtered) | Indexes only some rows | For example "only open claims" |
+    | BRIN (Postgres) | Stores only the min and max for each block of rows | Huge tables where rows arrive in order, such as telemetry by time; the index is tiny |
 
-    **Interview:** how indexes speed queries and what they cost; why an index isn't used; how warehouses filter fast without indexes.
+    ## The leftmost-prefix rule for composite indexes
+
+    An index on (dealer_id, submitted_at) is sorted by dealer_id first, then by submitted_at within each dealer, like a phone book sorted by surname, then first name.
+    - It **helps** WHERE dealer_id = 14, because that's the first column.
+    - It **helps** WHERE dealer_id = 14 AND submitted_at > '2026-01-01'.
+    - It **does not help** WHERE submitted_at > '2026-01-01' on its own. That is like searching a phone book by first name only.
+
+    When designing one, put the columns you compare with "=" first and the column you filter by range (>, <, BETWEEN) after them.
+
+    ## What indexes cost
+
+    - **Every write must also update every index.** A table with 10 indexes does roughly 10 extra writes for each inserted row.
+    - **Indexes take space,** sometimes as much as the table itself.
+    - **Bulk loads are faster without indexes.** It's often quicker to drop indexes, load the data, and rebuild them afterwards.
+    - **Indexes get messy over time** (called fragmentation or bloat) and need maintenance.
+    - **Statistics must stay fresh,** or the optimiser won't know when to use the index.
+
+    **Rule of thumb:** an index helps when a query returns only a small fraction of the table, a few percent or less. If a query needs half the rows, reading the whole table straight through is cheaper than jumping around via the index.
+
+    ## Why the database sometimes ignores your index
+
+    - **A function wraps the column.** WHERE DATE(submitted_at) = '2026-11-26' or WHERE UPPER(code) = 'D-014' can't use a normal index on that column. Rewrite the first as a range (submitted_at >= '2026-11-26' AND submitted_at < '2026-11-27'), or create an index on the function itself.
+    - **Hidden type conversion.** Comparing a text column with a number forces the database to convert every value.
+    - **A wildcard at the start.** LIKE '%pump' can't use the sorted order, because the beginning of the text is unknown. (LIKE 'pump%' can.)
+    - **Low selectivity.** If status = 'Approved' matches 60% of rows, scanning is cheaper, so the optimiser skips the index.
+    - **OR across different columns,** or filtering on the second column of a composite index without the first.
+    - **Out-of-date statistics** make the optimiser misjudge the cost.
+
+    ## How analytics systems do it instead
+
+    Warehouses and lakehouses (Snowflake, BigQuery, Databricks) mostly **don't use B-tree indexes**. Instead they **skip data**:
+    - **Partition pruning:** data is split into folders, for example by date, and only the matching folders are read.
+    - **Min/max statistics per file or chunk** (called zone maps): chunks that can't contain matching values are skipped.
+    - **Clustering, Z-order or liquid clustering:** related values are stored close together, so the min/max ranges are narrow and more chunks can be skipped, even across several columns.
+    - **Bloom filters:** small structures that can say "this value is definitely not in this file". Useful for columns with many distinct values, such as IDs.
+    - Snowflake calls this micro-partition pruning, BigQuery calls it clustering, and Delta calls it data skipping.
+
+    So in an app database the fix for a slow query is often "add an index", while in analytics it is "**fix how the data is laid out**".
+
+    ## Where data engineers meet indexes
+
+    - **Incremental extracts** that pull "rows changed since last time" with WHERE updated_at > … need an index on updated_at. Without one, every extract scans the whole production table and slows the app. Ask the database administrator for the index, or use CDC.
+    - **MERGE into a serving database** needs an index on the key, or each merge scans the table.
+    - **In the lakehouse,** partition by date, cluster by the columns people commonly filter on, and compact small files.
+
+    ## Interview answers
+
+    - **"How does an index speed up a query, and what does it cost?"** "A B-tree index keeps keys sorted in a shallow tree, so the database finds a row in a few page reads instead of scanning the table. The cost is slower writes, because every index must be updated, plus extra storage and maintenance."
+    - **"Why might a query not use an index?"** "A function or type conversion on the column, a leading wildcard, low selectivity, filtering on a composite index without its first column, or stale statistics."
+    - **"How do warehouses filter fast without indexes?"** "They skip data instead: partition pruning, min/max statistics per file, clustering to keep related values together, and bloom filters."
   `),
 
   normal: T(`
-    > **In one line:** **normalisation** stores each fact **once** across tables (safe updates, for OLTP); **denormalisation** repeats data in fewer, wider tables (fewer joins, for analytics). Each is right for its workload.
+    > **In one line:** **normalisation** means storing each fact **once**, spread across several linked tables, so that updates are safe. It is used in app databases. **Denormalisation** means deliberately repeating data in fewer, wider tables, so that queries need fewer joins. It is used in analytics. Each is right for its own job.
 
-    **What normalisation prevents (anomalies)** in one wide «claims(claim_id, dealer_id, dealer_name, dealer_region, amount)» table:
-    - **Update:** dealer 14 moves North; you update 4,998 of 5,000 rows → two regions.
-    - **Insert:** can't record a dealer before its first claim.
-    - **Delete:** deleting the only claim deletes everything known about the dealer.
-    Fix: a «dealers» table referenced by key.
+    ## The problem normalisation solves
 
-    | Form | Rule | Violation | Fix |
-    |---|---|---|---|
-    | 1NF | Atomic values, no repeating groups | «parts = "P-77,P-12"» | Child table, one row per part |
-    | 2NF | Non-key columns depend on the **whole** composite key | customer_name in «order_lines(order_id, line_no)» depends on order_id only | Move to «orders» |
-    | 3NF | No non-key → non-key dependency | dealer_region depends on dealer_id in claims | Move to «dealers» |
-    | BCNF | Every determinant is a candidate key | Rare overlapping-key cases | Further split |
-    Mnemonic: depends on **the key, the whole key, nothing but the key**. 3NF is the OLTP target.
+    Imagine one wide table that stores dealer details on every claim:
 
-    **Why analytics denormalises:** a 6-join query on billions of rows (with distributed shuffles) is expensive; analytics reads far more than it writes and loads in controlled batches, so the pipeline can handle anomalies. Forms: **star schema** (fact + wide flat dimensions), **one big table** for a heavy dashboard, **nested columns** (arrays/structs) instead of child tables.
+    | claim_id | dealer_id | dealer_name | dealer_region | amount |
+    |---|---|---|---|---|
+    | 9001 | 14 | Apex Motors | West | 500 |
+    | 9002 | 14 | Apex Motors | West | 700 |
+    | 9003 | 22 | Zen Auto | North | 300 |
+
+    Repeating the dealer's details causes three problems, called **anomalies**:
+    - **Update anomaly:** dealer 14 moves to the North region. You must update all 5,000 of its claims. If you miss 2, the database now says dealer 14 is in two regions at once.
+    - **Insert anomaly:** you can't record a new dealer until that dealer has made a claim, because dealer details only exist on claim rows.
+    - **Delete anomaly:** if you delete a dealer's only claim, you lose everything you knew about that dealer.
+
+    **The fix** is to move dealer details into their own dealers table, stored once, and have each claim refer to the dealer by dealer_id. Changing a region then means changing one row.
+
+    ## The normal forms
+
+    Normalisation is described in levels called **normal forms**. Each level removes another kind of repetition.
+
+    **First normal form (1NF): one value per cell.** Each cell must hold a single value, with no lists or repeating groups. A parts column containing "P-77,P-12" breaks this rule. The fix is a separate claim_parts table with one row per part.
+
+    **Second normal form (2NF): depend on the whole key.** This matters when the key is made of several columns. In an order_lines table keyed by (order_id, line_no), a customer_name column depends only on order_id, not on the whole key, so it gets repeated on every line of the order. The fix is to move customer_name to an orders table.
+
+    **Third normal form (3NF): depend only on the key.** A non-key column must not depend on another non-key column. In the claims table above, dealer_region depends on dealer_id, which is not the claim's key. The fix is to move it to the dealers table.
+
+    **Boyce-Codd normal form (BCNF)** is a stricter version of 3NF for rare cases with overlapping candidate keys.
+
+    A classic memory aid: every column must depend on **"the key, the whole key, and nothing but the key."** 3NF is the usual target for app databases.
+
+    ## Why analytics does the opposite
+
+    In analytics, a query joining 6 tables across billions of rows is expensive, especially when the data is spread across many machines and must be shuffled between them for each join. Analytics systems are also **read far more often than written**, and they are loaded in controlled batches by a pipeline. So the pipeline can take care of keeping repeated copies correct, and queries get simpler and faster.
+
+    Common denormalised shapes:
+    - **Star schema:** one central fact table (for example claims) surrounded by wide, flat dimension tables (dealer, date, engine), each joined with a single key.
+    - **One big table (OBT):** everything pre-joined into one very wide table, built for one heavy dashboard.
+    - **Nested columns:** instead of a separate child table, a row holds a list (array) or a group of fields (struct), for example the list of parts inside each claim row.
 
     | | Normalised | Denormalised |
     |---|---|---|
-    | Duplication | Minimal | Intentional |
-    | Writes | Simple, safe | Pipeline updates copies |
-    | Reads | Many joins | Few joins |
-    | Storage | Smaller | Larger (columnar compression helps) |
-    | Integrity | By structure | By pipeline logic and tests |
-    | Home | OLTP sources (and often silver entities) | Gold, marts, serving, features |
-    Dimensional modelling is "normalised enough" (facts reference dimensions) and "denormalised enough" (flat dimensions).
+    | Repetition | Minimal | Deliberate |
+    | Writing data | Simple and safe | The pipeline must update every copy |
+    | Reading data | Many joins | Few joins |
+    | Storage | Smaller | Larger (columnar compression reduces this) |
+    | What keeps data correct | The table structure itself | Pipeline logic and tests |
+    | Where it's used | App databases, often silver-layer entities | Gold layer, marts, serving tables, ML features |
+
+    Dimensional modelling (the star schema) sits in the middle. It is "normalised enough", because facts refer to dimensions by key, and "denormalised enough", because each dimension is flat and wide.
+
+    ## How the layers fit together
 
     «««flow
-    OLTP 3NF -> Silver conformed entities -> Gold star schema -> OBT for one heavy dashboard
+    App database (3NF) -> Silver layer (cleaned, conformed entities) -> Gold layer (star schema) -> One big table for a heavy dashboard
     »»»
-    The pipeline makes it safe: a region change updates (or SCD2-versions) the dimension in one controlled step, then gold is rebuilt. Wide marts are rebuilt from the star layer, never edited directly.
+
+    The pipeline keeps this safe. When a dealer changes region, the dealer dimension is updated in one controlled step (or a new version of the row is added, which is called SCD Type 2), and then the gold tables are rebuilt from it. Wide tables are always rebuilt from the star layer, never edited by hand.
 
     ## What goes wrong
-    Stale denormalised copies (nightly OBT shows yesterday's region) → document cadence, rebuild dependents together. **Fan-out joins** (claims joined to several contacts per dealer multiplies rows and inflates sums) → know every join's cardinality. Over-normalised analytics (analysts hand-write 9-join queries that drift) → modelled gold. **Current vs as-of:** putting the current region on historical facts moves last year's sales → decide (SCD2). Nested arrays confuse BI tools → flatten at consumption.
 
-    **Interview:** 1NF/2NF/3NF with the claims example; why denormalise in a warehouse (read-heavy, batch loads, costly joins, cheap compressed duplication); **fan-out** = join with multiple matches per key that multiplies rows.
-  `),
+    - **Stale copies.** A one-big-table rebuilt nightly still shows yesterday's region today. Document how often each table refreshes, and rebuild dependent tables together.
+    - **Fan-out joins.** If each dealer has several contacts and you join claims to contacts, every claim row is repeated once per contact, and summed amounts become inflated. Always know how many matches each join can produce (its **cardinality**).
+    - **Over-normalised analytics.** Analysts end up writing 9-join queries by hand, and their results slowly disagree. Provide modelled gold tables instead.
+    - **Current vs historical values.** If you attach the dealer's *current* region to last year's claims, last year's regional totals change whenever a dealer moves. Decide deliberately, and use SCD Type 2 when history must be preserved.
+    - **Nested arrays confuse BI tools.** Flatten them in the tables people query.
 
-  transactions: T(`
-    > **In one line:** a **transaction** makes several operations **all happen or none**; **ACID** (Atomicity, Consistency, Isolation, Durability) keeps that safe under concurrency and crashes.
+    ## Interview answers
 
-    **Example:** approving a claim = set Approved + insert credit note + reduce dealer balance. A crash after step 1 leaves an approval with no credit note; two clerks at once create two credit notes. Transactions prevent both.
-
-    | Letter | Guarantee | Mechanism |
-    |---|---|---|
-    | Atomicity | All or nothing | WAL + rollback |
-    | Consistency | Valid state; constraints hold | Constraints, checks at commit |
-    | Isolation | No one sees half-done work | Locks / MVCC |
-    | Durability | Committed survives crashes | Log flushed before "commit OK" |
-    ACID "consistency" (constraints) ≠ CAP "consistency" (replicas return the latest write). Interviewers love this.
-
-    ## Isolation anomalies and levels
-    | Anomaly | Meaning |
-    |---|---|
-    | Dirty read | Read uncommitted data that is then rolled back |
-    | Non-repeatable read | Same row, different value on re-read |
-    | Phantom | Same query returns new rows |
-    | Lost update | Two read-modify-writes; one overwrites the other |
-    | Write skew | Each checks a condition and writes different rows; together they break a rule (both on-call engineers go off duty) |
-    | Level | Prevents | Still allows |
-    |---|---|---|
-    | Read uncommitted | Almost nothing | Dirty reads |
-    | **Read committed** (default: Postgres, SQL Server, Oracle) | Dirty reads | Non-repeatable, phantoms, lost updates |
-    | Repeatable read / snapshot | + non-repeatable (and phantoms in snapshot) | Write skew |
-    | Serializable | All (as if one at a time) | Costs throughput; aborts for retry |
-
-    **MVCC:** writes create new row versions tagged with the transaction ID; readers see versions committed when their snapshot began, so **readers don't block writers**; old versions are cleaned later (Postgres VACUUM). Lakehouse formats do the same with files: each commit = a new table version, readers use snapshots.
-
-    ## In data engineering
-    - **Relational target:** wrap "delete partition + insert partition" in one transaction so readers never see an empty day.
-    - **Lakehouse:** each write is an atomic log commit, snapshot isolation for readers, **optimistic concurrency** for writers (conflicts fail and retry). Atomicity is **per table**: updating a fact and its aggregate = two commits; readers may see one without the other unless you publish after both (view swap) or the platform has multi-table transactions.
-    - **Streaming exactly-once:** commit output and progress (offsets) atomically, or write idempotently.
-    - **Across systems** (DB + Kafka + API): two-phase commit is slow and fragile; prefer the **outbox pattern** (event row written in the same DB transaction, then published via CDC), idempotent consumers and **sagas** (local transactions with compensations).
-
-    ## What goes wrong
-    Read-modify-write races (two jobs read the same watermark and both process) → «SELECT … FOR UPDATE», version checks, single scheduler. **Long transactions** hold locks, bloat MVCC, block DDL, lag replication (never keep a 2-hour extract transaction open on a primary). Autocommit leaves partial changes when statement 3 of 5 fails. Assuming multi-table atomicity in a lakehouse. **Retrying after a timeout** may duplicate (the commit may have succeeded) → idempotency keys.
-
-    **Interview:** ACID with the claim example; default isolation and its remaining anomalies (read committed: lost updates, non-repeatable reads); how Delta gives ACID (atomic log commits, snapshots, optimistic concurrency); DB write + Kafka publish → outbox + CDC or idempotent consumers.
-  `),
-
-  replication: T(`
-    > **In one line:** replication keeps **copies on several machines** for availability, durability and read scale. The hard part: keeping copies in agreement and knowing how far behind each is.
-
-    **Leader-follower** (most common): all writes go to the leader, which ships its log (WAL/binlog) to followers that apply it in order; followers serve reads; if the leader dies, a follower is **promoted** (failover).
-
-    | | Synchronous | Asynchronous |
-    |---|---|---|
-    | Commit returns after | Followers confirm | Leader writes locally |
-    | Loss on leader crash | None (confirmed followers) | Last unshipped changes |
-    | Write latency | Higher | Lower |
-    | Slow follower | Slows/blocks writes | No effect |
-    Compromise: **semi-synchronous** (wait for one follower).
-
-    - **Multi-leader:** several nodes accept writes (e.g. per region); low local latency but **conflicts** need rules (last-write-wins, merge).
-    - **Leaderless** (Cassandra, DynamoDB): write to several replicas, read several, take the newest. **Quorum:** N replicas, write W, read R; **W + R > N** guarantees a read overlaps the latest write (N=3, W=2, R=2).
-    - **Consensus** (Raft/Paxos: etcd, CockroachDB, Kafka KRaft, Spanner): majority agrees per write; strong consistency with automatic failover.
-    - **Physical** replication copies pages (same engine/version); **logical** streams row changes (cross-version, selected tables, **CDC**, as Debezium uses).
-
-    **Lag anomalies:** read-your-own-write fails (save then read a stale replica); non-monotonic reads (data appears to go back in time across replicas); stale "current" dashboards on a lagging replica. Measure lag and decide which reads may use replicas; extracts from async replicas are fine if you **record the replica's position/time**.
-
-    | System | Replication |
-    |---|---|
-    | Postgres/MySQL | Leader-follower via WAL/binlog; logical replication feeds CDC |
-    | HDFS | Each block on 3 DataNodes, rack-aware |
-    | Kafka | Partition leader + followers; **ISR**; «acks=all» + «min.insync.replicas=2» |
-    | Cassandra/DynamoDB | Leaderless, tunable per request |
-    | Object storage | Within-region automatic; cross-region optional |
-
-    **Replication is not backup:** a «DELETE» without WHERE replicates everywhere in milliseconds. Backups and time travel protect against logical errors; replication against hardware failure.
-
-    ## What goes wrong
-    **Split brain** (two leaders after a network partition; data diverges) → consensus/quorum and fencing. Async failover loses the last seconds of writes (IDs may be reused). CDC from a lagging replica lags; an unconsumed Postgres **replication slot** retains WAL until the disk fills. After failover the CDC slot/position may not exist on the new primary → re-snapshot or slot failover. Kafka «acks=1» loses messages if the leader dies before followers copy. Cross-region replication surprises bills and latency.
-
-    **Interview:** sync vs async (durability vs latency vs availability); lag effects on replica extracts (stale data, watermark gaps); replication ≠ backup; W + R > N.
-  `),
-
-  dbpartition: T(`
-    > **In one line:** partitioning **splits a large table into pieces** by a rule (date, region, key hash) so queries **skip pieces**, maintenance works **piece by piece**, and data can **spread across machines**. The partition key is a high-stakes design choice.
-
-    **Three meanings of "partition":** (1) splitting within one system for pruning and management (a month-partitioned table, «/event_date=2026-11-26/» folders); (2) splitting across machines = **sharding** (Cassandra, Kafka topics, distributed SQL); (3) in Spark, a chunk of data processed by one task. Say which you mean.
-
-    | Strategy | Rule | Good for | Risk |
-    |---|---|---|---|
-    | Range | Value ranges (dates, IDs) | Time queries, dropping old data | Hot latest partition |
-    | List | Explicit values (region) | Known categories | Uneven sizes |
-    | Hash | hash(key) mod N | Even spread | Ranges hit all partitions; changing N reshuffles (use consistent hashing) |
-    | Composite | Range then hash | Time queries + spread | Complexity |
-
-    **Benefits:** **pruning** («event_date = …» reads 1 of 1,000); **instant retention** (drop a partition instead of a huge DELETE); **idempotent loads** (overwrite exactly one partition per run: insert overwrite / replaceWhere); parallelism; per-partition maintenance.
-
-    ## Choosing a key
-    1. Columns queries **filter on** (usually date).
-    2. **Low-moderate cardinality** for folder-style partitions (date yes; 100,000 engine_ids no).
-    3. Partitions of roughly **1 GB+** in lakehouses (files ~128 MB-1 GB); thousands of tiny partitions are worse than none.
-    4. **Stable values** (not status, which would force rows to move).
-    5. Match the **load pattern** (daily loads → daily partitions).
-    6. For **sharding**: high cardinality, even spread, related data together (engine_id). Shard keys are near-permanent.
-
-    **Lakehouse:** Hive-style folders prune by path; for other filter columns use **clustering / Z-order / liquid clustering** instead of more partition columns. **Iceberg hidden partitioning** stores a transform (day(ts)) so filters on «ts» still prune, and schemes can evolve without rewrites. Databricks advises not partitioning tables under ~1 TB; cluster instead.
-
-    ## What goes wrong
-    **Over-partitioning** (date × engine_id → millions of tiny-file folders; planning slower than reading). Filtering on a function («year(event_ts) = 2026») when the partition column is «event_date» → no pruning; filter the column itself. **Skewed** partitions (one region 70%). Late data writes into old partitions → daily overwrite needs a **lookback**. Local vs UTC partition dates split days differently → be consistent. Time-range sharding sends all of today's writes to one shard.
-
-    **Interview:** partition a 5 TB events table → daily by event date, cluster by the common filter key, right-sized files, compaction, no high-cardinality partition columns. Pruning = skipping partitions at planning time. Range vs hash = locality vs even spread.
-  `),
-
-  scaling: T(`
-    > **In one line:** **vertical (scale up)** = a bigger machine; **horizontal (scale out)** = more machines. Up is simple but has a ceiling and one failure domain; out is nearly unlimited but brings distributed-systems problems.
-
-    | | Vertical | Horizontal |
-    |---|---|---|
-    | How | Bigger instance (8 → 64 cores, 32 → 512 GB) | Shard data, distribute work (Spark), stateless services behind load balancers, Kafka consumer groups |
-    | Pros | No code changes, easy consistency, one machine to run | Near-linear growth, commodity hardware, fault tolerance, cloud elasticity |
-    | Cons | Top-end prices rise steeply, hard ceiling, resize downtime, single point of failure | Network/shuffle bottlenecks, coordination and consistency, partial failures, harder ops, not everything parallelises |
-    | Typical | OLTP databases, DuckDB/pandas, most pipelines that aren't huge | Big data processing, streaming, large serving systems |
-
-    ## The laws
-    - **Amdahl:** if 10% is sequential, no cluster makes it more than 10× faster. Remove sequential parts (driver work, one final sort, one giant key).
-    - **Coordination cost:** more nodes = more communication; adding nodes to a shuffle-heavy job can slow it.
-    - **Stateless scales easily, stateful doesn't** (adding DB nodes means moving data).
-    - **Read scaling** (replicas, caches) is easy; **write scaling** needs sharding or distributed DBs; **analytical scaling** = move analytics off OLTP.
-
-    | Bottleneck | Scale up | Scale out |
-    |---|---|---|
-    | Query CPU | Bigger warehouse | More clusters/nodes |
-    | Dashboard concurrency | Bigger box | Multi-cluster warehouses, replicas, caching |
-    | Stream throughput | Faster consumer | More Kafka partitions + consumers |
-    | Spark job | Bigger executors | More executors/partitions |
-    | OLTP writes | Bigger primary | Sharding, distributed SQL |
-    Vertical first is often right for databases; Postgres also hits **connection limits** (a process each) → poolers (PgBouncer), cap Spark JDBC parallelism.
-
-    **Elasticity:** cloud scales out for the nightly batch and back in afterwards (autoscaling, serverless, auto-suspend); limits are start-up time, minimums, quotas, and bad queries triggering costly scale-out.
-
-    **Before scaling, do less work:** read less (pruning, column projection, early filters), process less (incremental), move less (broadcast small tables, avoid needless repartitions), fix skew. **Profile first, then scale.**
-
-    ## What goes wrong
-    Scaling out a **skewed** job (199 tasks done in 1 minute, 1 takes 40). **Driver bottleneck** (collect to driver, single-threaded Python). Too many tiny partitions (overhead > work). **Shared bottleneck** (50 workers vs one rate-limited API or DB). Hot keys in sharded stores.
-
-    **Interview:** pros/cons of each; slow Spark job → check skew, shuffles, small files, sequential parts and data read before adding nodes; Kafka consumer scaling is capped by partitions (one consumer per partition per group).
-  `),
-
-  schema: T(`
-    > **In one line:** a **schema** is the agreed structure (names, types, nullability, keys, meaning); **schema evolution** changes it **without breaking** producers or consumers. Most pipeline outages trace back to an unmanaged schema change.
-
-    **Schema-on-write** (relational, Delta enforcement, Avro + registry): bad data rejected early; safer, less flexible. **Schema-on-read** (raw JSON in a lake): flexible, but every reader copes with every variation and errors appear late. Practice: **on-read for bronze, on-write from silver**.
-
-    | Change | Risk |
-    |---|---|
-    | Add optional column | Usually safe |
-    | Add required column | Breaks old producers |
-    | Remove column | Breaks consumers reading it |
-    | Rename | Breaks everyone (= remove + add) |
-    | Widen type (INT→BIGINT, FLOAT→DOUBLE) | Usually safe |
-    | Narrow/change type | Fails or truncates |
-    | Change meaning (amount now excludes tax) | **Silent**: numbers shift |
-    | Change grain (claim → claim line) | **Silent** double counting |
-    | Change nullability | Breaks NOT NULL assumptions |
-
-    ## Registry compatibility (Avro/Protobuf/JSON Schema in Kafka)
-    - **Backward:** new-schema consumers read old data (add field **with a default**) → **upgrade consumers first**.
-    - **Forward:** old-schema consumers read new data (add fields old readers ignore; remove optional fields) → **upgrade producers first**.
-    - **Full:** both. **Transitive:** against all previous versions, not just the last.
-    The registry rejects incompatible producers, turning an outage into a failed deploy.
-
-    **Lakehouse:** Delta **enforces** by default; «mergeSchema» adds columns, «overwriteSchema» replaces; **column mapping** allows rename/drop without rewriting files; **type widening** allows safe promotions; enabling table features can lock out readers on older protocol versions (check consumers). Iceberg tracks columns by **ID**, so add/drop/rename/reorder are metadata-only, plus partition evolution. Auto Loader's **«_rescued_data»** column keeps unexpected fields and type mismatches instead of failing or losing them.
-
-    ## Safe change process
-    1. Classify: additive, breaking or semantic.
-    2. Additive: deploy, document.
-    3. Breaking: **expand → migrate → contract**: add the new alongside the old, backfill, move consumers (found via lineage), remove the old after a deprecation date. Never rename/drop in one step on shared tables.
-    4. Semantic: treat as breaking (new name/version, announce).
-    5. Automate: producer contract tests in CI, ingestion schema checks, drift alerts.
-    Layers: bronze tolerant, silver evolves deliberately under contracts, gold changes only through versioned releases.
-
-    ## What goes wrong
-    Renamed source column read by name returns NULL in permissive readers (green job). JSON type drift: inference picks a type per file, files disagree. Inference on a sample misses a rare field for everyone. «INSERT … SELECT *» maps by **position**, so reordered columns land in wrong places → map by name. CSV headers change while code uses positions. Years of Parquet with differing schemas need merging or a table format. BI extracts with fixed schemas break.
-
-    **Interview:** what happens and what should happen when a source adds/renames a column; backward vs forward (who reads what, who upgrades first); rolling out breaking changes (expand-migrate-contract, versioning, lineage, communication).
-  `),
-
-  fileformats: T(`
-    > **In one line:** the file format decides byte layout (text/binary, row/column, schema or not, splittable or not, compressible or not), which can make the same query **10-100× cheaper**. **CSV/JSON to exchange, Avro to stream, Parquet (in Delta/Iceberg) to analyse.**
-
-    | | CSV | JSON (Lines) | Avro | Parquet | ORC |
-    |---|---|---|---|---|---|
-    | Layout | Row text | Row text | Row binary | Columnar | Columnar (stripes) |
-    | Schema/types | None | Implicit, weak | Explicit, evolvable | Explicit (footer) | Explicit |
-    | Nested | No | Yes | Yes | Yes | Yes |
-    | Compression | Poor | Poor | Good | Excellent | Excellent |
-    | Splittable | Uncompressed or bzip2 | JSON Lines only | Yes | Yes | Yes |
-    | Best at | Partner exchange, small exports | APIs, events, raw landing | Kafka, streaming, write-heavy | Analytics at rest | Hive ecosystems |
-    - **CSV:** readable, universal; but no types, quoting/escaping/embedded-newline issues, delimiter collisions, encodings, large and slow.
-    - **JSON:** flexible and nested; repeats field names (large), slow parsing, type drift. **JSON Lines** (one object per line) is splittable and streamable.
-    - **Avro:** compact binary rows with a schema (header or registry), strong evolution (defaults, aliases); not readable, poor for scans.
-    - **Parquet:** row groups → column chunks → pages, min/max stats, encodings + codec; column pruning, pushdown, nested types; costly to write row by row, immutable (updates = rewrites), needs a table format for ACID. Use INT64 timestamps (INT96 is legacy); very wide schemas (thousands of columns) slow footers and planning.
-    - **ORC:** Parquet-like with indexes and bloom filters; strong in Hive/Presto.
-    - **Table formats** (Delta, Iceberg, Hudi) aren't file formats: they're a metadata layer (log, schema, snapshots, stats) over Parquet.
-    - **VARIANT** (Spark 4/Databricks, Iceberg v3): efficient binary semi-structured JSON with common paths shredded; an alternative to strings or rigid structs for evolving payloads.
-
-    **Splittable matters:** parallel engines give each worker a byte range. Uncompressed CSV/JSON Lines can start mid-file; **a GZIP CSV cannot**, so one 50 GB «.csv.gz» is read by **one task** (split it, use bzip2, or convert to Parquet). Parquet/Avro/ORC are splittable with any codec. One giant JSON array isn't.
-
-    «««flow
-    Source export (CSV/JSON) -> Raw as received (bronze) -> Parquet/Delta with enforced schema (silver) -> Gold Delta -> Exports in the consumer's format
-    »»»
-    Kafka carries Avro (or Protobuf/JSON with a registry).
-
-    ## What goes wrong
-    **CSV parsing:** quoted commas, newlines in fields, escaping, trailing delimiters, mixed line endings, BOMs, non-UTF-8, thousands separators («1,250.00»), ambiguous dates (03/04 = March or April?) → always set delimiter, quote, escape, encoding, header, date format and an explicit **schema**; no inference in production. Inference on a sample breaks when later rows differ. Parquet files disagreeing on a type (INT vs DOUBLE) or decimal precision. Timestamp differences (INT96 vs INT64, UTC vs local, ms vs µs). Many small Parquet files → compact.
-
-    **Interview:** why Parquet; Parquet vs Avro (columnar reads vs row writes/streaming with evolution); one 40 GB «.csv.gz» on one core → GZIP isn't splittable.
-  `),
-
-  compression: T(`
-    > **In one line:** compression cuts the bytes you **store, read and move**, trading CPU for less I/O. Columnar formats use two layers: **encodings** that exploit column patterns, then a **codec** (Snappy, ZSTD, GZIP).
-
-    **Why it speeds things up:** storage reads and network are the bottleneck; CPUs decompress faster than disks/networks deliver. 100 GB compressed to 15 GB = 85% less I/O, and a smaller bill in pay-per-scan engines (BigQuery).
-
-    | Encoding | How | Best for |
-    |---|---|---|
-    | Dictionary | Each distinct value once; data becomes small codes | Status, region, model |
-    | Run-length (RLE) | value × count | Long repeated runs (after sorting) |
-    | Delta | Differences between consecutive values | Timestamps, increasing IDs |
-    | Bit-packing | Only the bits needed | Small integers, dictionary codes |
-    Parquet applies these automatically per column chunk; **sorting by low-cardinality columns before writing** makes them far more effective. Encodings do most of the work.
-
-    | Codec | Ratio | Speed | Typical use |
-    |---|---|---|---|
-    | Snappy | Moderate | Very fast | Long-time Spark Parquet default, hot data |
-    | **ZSTD** | High | Fast (tunable) | Modern balanced default |
-    | LZ4 | Moderate | Fastest | Kafka, real-time |
-    | GZIP | High | Slow | Text files, archives (whole-file: **not splittable**) |
-    | bzip2 | High | Very slow | Rare archival text (splittable) |
-    Inside Parquet/ORC/Avro the codec works per page/block, so files **stay splittable** with any codec; the problem is only whole-file compressed text (one big «.csv.gz»).
-
-    **Choose:** hot data → Snappy or low-level ZSTD; cold/archive → high ZSTD or GZIP (pay CPU once, save forever); Kafka → LZ4/ZSTD with batching (bigger batches compress better); text exchange → GZIP split into ~256 MB parts.
-    **Trade-offs:** CPU on write vs smaller faster reads (worth it for data read many times); already-compressed data (images, video, encrypted) won't shrink further.
-
-    ## What goes wrong
-    One giant gzip file reduces a 100-core cluster to one core. Tiny files compress poorly (fix sizes first). **Encrypting before compressing** makes data incompressible: compress first (Parquet modular encryption handles this). Random high-cardinality strings (UUIDs, hashes) compress badly: store as binary or question the need. A 1 GB compressed file may be 10 GB in memory: size executors for decompressed data.
-
-    **Interview:** Snappy vs GZIP vs ZSTD (speed vs ratio; ZSTD balanced; GZIP for text); why compression is faster (I/O-bound); is Snappy Parquet splittable? Yes (per page/row group).
+    - **"Explain 1NF, 2NF and 3NF."** "1NF: one value per cell, no lists. 2NF: every non-key column depends on the whole composite key. 3NF: no non-key column depends on another non-key column, for example a dealer's region belongs in the dealers table, not on every claim."
+    - **"Why denormalise in a warehouse?"** "Warehouses are read far more than written and loaded in controlled batches, joins are expensive at scale, and repeated values compress well in columnar storage. So fewer, wider tables make queries simpler and faster."
+    - **"What is a fan-out join?"** "A join where one row matches several rows on the other side, which multiplies rows and inflates sums."
   `),
 };
